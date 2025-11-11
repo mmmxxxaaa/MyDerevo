@@ -4,6 +4,61 @@
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
+#include <ctype.h>
+
+void ToLowerCase(char* string)
+{
+    for (int i = 0; string[i] != '\0'; i++)
+    {
+        string[i] = (char)tolower(string[i]);
+    }
+}
+
+void ClearInputBuffer()
+{
+    int c = '\0';
+    while ((c = getchar()) != '\n' && c != EOF) { }
+}
+
+bool GetUserAnswer(const char* question)
+{
+    char answer[kMaxInputCapacity] = {};
+
+    while (true)
+    {
+        printf("%s? (да/нет): ", question); //FIXME вопросы дюпаются
+        if (fgets(answer, sizeof(answer), stdin) == NULL)
+        {
+            ClearInputBuffer();
+            continue;
+        }
+
+        size_t len = strlen(answer);
+        if (len > 0 && answer[len-1] != '\n')
+        {
+            ClearInputBuffer();
+            printf("Слишком длинный ввод. Пожалуйста, ответьте короче.\n");
+            continue;
+        }
+
+        if (len > 0 && answer[len-1] == '\n')
+            answer[len-1] = '\0';
+
+        ToLowerCase(answer);
+
+        if (strcmp(answer, "да") == 0 || strcmp(answer, "д") == 0 || strcmp(answer, "yes") == 0 || strcmp(answer, "y") == 0)
+            return true;
+        else if (strcmp(answer, "нет") == 0 || strcmp(answer, "н") == 0 || strcmp(answer, "no") == 0 || strcmp(answer, "n") == 0)
+            return false;
+        else
+            printf("Пожалуйста, ответьте 'да' или 'нет'.\n");
+    }
+}
+
+bool IsLeaf(Node* node)
+{
+    return node != NULL && node->left == NULL && node->right == NULL;
+}
 
 static TreeErrorType TreeDestroyRecursive(Node* node)
 {
@@ -13,99 +68,244 @@ static TreeErrorType TreeDestroyRecursive(Node* node)
     TreeDestroyRecursive(node->left);
     TreeDestroyRecursive(node->right);
 
+    if (node->data)
+        free(node->data);
     free(node);
 
     return TREE_ERROR_NO;
 }
 
-static TreeErrorType PrintTreeNode(const Node* node)
-{
-    if (node == NULL)
-    {
-        printf("()");
-        return TREE_ERROR_NO;
-    }
 
-    printf("(");
-    if (node->left)
-        PrintTreeNode(node->left);
-
-    printf("%d", node->data);
-
-    if (node->right)
-        PrintTreeNode(node->right);
-    printf(")");
-
-    return TREE_ERROR_NO;
-}
-
-static TreeErrorType TreeInsertRecursive(Node** node_ptr, Node* parent, TreeElement value) //иначе будем изменять копию node_ptr
-{
-    if (*node_ptr == NULL)
-    {
-        *node_ptr = (Node*)calloc(1, sizeof(Node));
-        if (*node_ptr == NULL)
-            return TREE_ERROR_ALLOCATION;
-
-        (*node_ptr)->data   = value;
-        (*node_ptr)->left   = NULL;
-        (*node_ptr)->right  = NULL;
-        (*node_ptr)->parent = parent;
-        return TREE_ERROR_NO;
-    }
-
-    if (value <= (*node_ptr)->data)
-        return TreeInsertRecursive(&(*node_ptr)->left,  *node_ptr, value);
-
-    else if (value > (*node_ptr)->data)
-        return TreeInsertRecursive(&(*node_ptr)->right, *node_ptr, value);
-
-    return TREE_ERROR_NO;
-}
+//это для работы с числами
+// static TreeErrorType TreeInsertRecursive(Node** node_ptr, Node* parent, TreeElement value) //иначе будем изменять копию node_ptr
+// {
+//     if (*node_ptr == NULL)
+//     {
+//         *node_ptr = (Node*)calloc(1, sizeof(Node));
+//         if (*node_ptr == NULL)
+//             return TREE_ERROR_ALLOCATION;
+//
+//         (*node_ptr)->data = value ? strdup(value) : NULL;
+//         if (value != NULL && (*node_ptr)->data == NULL)
+//         {
+//             // free(*node_ptr); //это делает деструктор
+//             return TREE_ERROR_ALLOCATION;
+//         }
+//
+//         (*node_ptr)->left   = NULL;
+//         (*node_ptr)->right  = NULL;
+//         (*node_ptr)->parent = parent;
+//         return TREE_ERROR_NO;
+//     }
+//
+//     return TreeInsertRecursive(&(*node_ptr)->left,  *node_ptr, value);
+// }
 
 TreeErrorType TreeCtor(Tree* tree)
 {
     tree->root = NULL;
     tree->size = 0;
 
-    return TREE_ERROR_NO;
+    return TreeInsert(tree, "неизвестно что");
 }
 
-TreeErrorType TreeInsert(Tree* tree, TreeElement value)
+static Node* CreateNode(const char* value, Node* parent)
 {
-    if (tree == NULL)
-        return TREE_ERROR_NULL_PTR;
+    Node* node = (Node*)calloc(1, sizeof(Node));
+    if (node == NULL)
+        return NULL;
 
-    TreeErrorType result = TreeInsertRecursive(&tree->root, NULL, value);
-    if (result == TREE_ERROR_NO)
-        tree->size++;
-
-    return result;
-}
-
-TreeErrorType TreeBaseDump(Tree* tree)
-{
-    if (tree == NULL)
+    node->data = value ? strdup(value) : NULL;
+    if (value != NULL && node->data == NULL)
     {
-        printf("Tree: NULL\n");
-        return TREE_ERROR_NULL_PTR;
+        free(node);
+        return NULL;
     }
 
-    printf("===TREE DUMP===\n");
-    printf("Tree size: %lu\n", tree->size);
-    printf("Tree structure:\n");
+    node->left = NULL;
+    node->right = NULL;
+    node->parent = parent;
+
+    return node;
+}
+
+TreeErrorType TreeInsert(Tree* tree, const char* value)
+{
+    if (tree == NULL)
+        return TREE_ERROR_NULL_PTR;
 
     if (tree->root == NULL)
     {
-        printf("EMPTY TREE");
+        tree->root = CreateNode(value, NULL);
+        if (tree->root == NULL)
+            return TREE_ERROR_ALLOCATION;
+
+        tree->size++;
+        return TREE_ERROR_NO;
+    }
+
+    Node* current = tree->root;
+    while (current->left != NULL)
+        current = current->left;
+
+    current->left = CreateNode(value, current);
+    if (current->left == NULL)
+        return TREE_ERROR_ALLOCATION;
+
+    tree->size++;
+    return TREE_ERROR_NO;
+}
+
+TreeErrorType TreeAddQuestion(Tree* tree, Node* leaf, const char* question,
+                              const char* yes_answer, const char* no_answer)
+{
+    if (tree == NULL || leaf == NULL || question == NULL || yes_answer == NULL || no_answer == NULL)
+        return TREE_ERROR_NULL_PTR;
+
+    char* old_answer = leaf->data;
+    char* question_copy = strdup(question);
+    if (question_copy == NULL)
+        return TREE_ERROR_ALLOCATION;
+
+    // создаем левый узел (да) [сюда новый объект]
+    leaf->left = CreateNode(yes_answer, leaf);
+    if (leaf->left == NULL)
+    {
+        free(question_copy);
+        return TREE_ERROR_ALLOCATION;
+    }
+
+    // создаем правый узел (да) [сюда старый объект]
+    leaf->right = CreateNode(no_answer, leaf);
+    if (leaf->right == NULL)
+    {
+        free(question_copy);
+        free(leaf->left->data);
+        free(leaf->left);
+        leaf->left = NULL;
+        return TREE_ERROR_ALLOCATION;
+    }
+    //теперь наш бывший лист это признак, копируем в него вопрос
+    leaf->data = question_copy;
+
+    free(old_answer);
+
+    tree->size += 2;
+
+    return TREE_ERROR_NO;
+}
+
+void SafeInputString(char* buffer, size_t buffer_size, const char* prompt)
+{
+    while (true)
+    {
+        if (prompt)
+            printf("%s", prompt);
+
+        buffer[0] = '\0';
+
+        if (fgets(buffer, buffer_size, stdin) == NULL)
+        {
+            ClearInputBuffer();
+            printf("Ошибка ввода. Попробуйте снова.\n");
+            continue;
+        }
+
+        size_t len = strlen(buffer);
+        if (len > 0 && buffer[len-1] != '\n')
+        {
+            ClearInputBuffer();
+            printf("Ввод слишком длинный. Пожалуйста, введите снова (макс. %zu символов).\n", buffer_size - 1);
+            continue;
+        }
+
+        if (len > 0 && buffer[len-1] == '\n')
+            buffer[len-1] = '\0';
+
+        if (buffer[0] == '\0')
+        {
+            printf("Пустой ввод не допускается. Пожалуйста, введите текст.\n");
+            continue;
+        }
+
+        break;
+    }
+}
+
+void PlayAkinator(Tree* tree)
+{
+    if (tree == NULL || tree->root == NULL)
+    {
+        printf("Дерево не инициализировано!\n");
+        return;
+    }
+
+    printf("\n=== Это игра АКИНАТОР! ===\n");
+    printf("Загадайте животное, растение или предмет, и я попробую угадать!\n\n");
+
+    Node* current = tree->root; //начинаем с корня
+
+    while (!IsLeaf(current))
+    {
+        bool answer = GetUserAnswer(current->data);
+
+        if (answer)
+        {
+            if (current->left != NULL)
+            {
+                current = current->left;
+            }
+            else
+            {
+                printf("Ошибка в структуре дерева\n");
+                return;
+            }
+        }
+        else
+        {
+            if (current->right != NULL)
+            {
+                current = current->right;
+            }
+            else
+            {
+                printf("Ошибка в структуре дерева\n");
+                return;
+            }
+        }
+    }
+
+    // дошли до листа -> это ответ
+    printf("Я думаю, это: %s\n", current->data);
+
+    bool is_correct = GetUserAnswer("Я угадал?");
+
+    if (is_correct)
+    {
+        printf("Я угадал! Спасибо за игру!\n");
     }
     else
     {
-        PrintTreeNode(tree->root);
-    }
+        printf("Ой! Я не угадал.\n");
 
-    putchar('\n');
-    return TREE_ERROR_NO;
+        char correct_answer[kMaxInputCapacity]          = {};
+        char distinguishing_question[kMaxInputCapacity] = {};
+
+        SafeInputString(correct_answer, sizeof(correct_answer), "Что ты загадал? ");
+
+        printf("Какой вопрос отличает \"%s\" от \"%s\"? \n", correct_answer, current->data);
+        printf("(Вопрос должен быть таким, чтобы для \"%s\" ответ был ДА): ", correct_answer);
+
+        SafeInputString(distinguishing_question, sizeof(distinguishing_question), "");
+        // новый объект на ДА, старый на НЕТ
+        TreeErrorType result = TreeAddQuestion(tree, current, distinguishing_question,
+                                               correct_answer, current->data);
+
+        if (result == TREE_ERROR_NO)
+            printf("Спасибо! Теперь я знаю больше!\n");
+        else
+            printf("Ошибка при добавлении вопроса!\n");
+    }
 }
 
 TreeErrorType TreeDtor(Tree* tree)
@@ -121,312 +321,132 @@ TreeErrorType TreeDtor(Tree* tree)
     return TREE_ERROR_NO;
 }
 
-TreeErrorType TreeDump(Tree* tree, const char* filename)
+//FIXME переделать с поиск листа с рекурсии на цикл
+static Node* FindLeafByData(Node* node, const char* data, bool case_sensitive)
 {
-    if (tree == NULL)
+    if (node == NULL)
+        return NULL;
+
+    if (IsLeaf(node))
+    {
+        int compare_result = 0;
+        if (case_sensitive)
+        {
+            compare_result = strcmp(node->data, data);
+        }
+        else
+        {
+            char* node_data_lower = strdup(node->data);
+            char* data_lower = strdup(data);
+            if (node_data_lower == NULL || data_lower == NULL)
+            {
+                free(node_data_lower);
+                free(data_lower);
+                return NULL;
+            }
+
+            ToLowerCase(node_data_lower);
+            ToLowerCase(data_lower);
+            compare_result = strcmp(node_data_lower, data_lower);
+
+            free(node_data_lower);
+            free(data_lower);
+        }
+
+        if (compare_result == 0)
+            return node;
+    }
+
+    // рекурсивно ищем в левом и правом поддеревьях
+    Node* left_result = FindLeafByData(node->left, data, case_sensitive);
+    if (left_result != NULL)
+        return left_result;
+
+    Node* right_result = FindLeafByData(node->right, data, case_sensitive);
+    return right_result;
+}
+
+// Функция для вывода пути к объекту
+TreeErrorType PrintObjectPath(Tree* tree, const char* object)
+{
+    if (tree == NULL || object == NULL)
+    {
+        printf("Ошибка: дерево или объект не задан.\n");
         return TREE_ERROR_NULL_PTR;
-
-    char command[kMaxSystemCommandLength] = {};
-    snprintf(command, sizeof(command), "mkdir -p %s", kGeneralFolderNameForLogs);
-    system(command);
-
-    char folder_name[kMaxLengthOfFilename] = {};
-    snprintf(folder_name, sizeof(folder_name), "%s_dump", filename);
-
-    char folder_path[kMaxLengthOfFilename] = {};
-    snprintf(folder_path, sizeof(folder_path), "%s/%s_dump", kGeneralFolderNameForLogs, filename);
-
-    snprintf(command, sizeof(command), "mkdir -p %s", folder_path);
-    system(command);
-
-    char htm_filename[kMaxLengthOfFilename] = {};
-    snprintf(htm_filename, sizeof(htm_filename), "%s/%s.htm", kGeneralFolderNameForLogs, filename);
-
-    FILE* htm_file = fopen(htm_filename, "a");
-    if (!htm_file)
-        return TREE_ERROR_OPENING_FILE;
-
-    TreeErrorType result = TreeDumpToHtm(tree, htm_file, folder_path, folder_name);
-
-    fclose(htm_file);
-    return result;
-}
-
-TreeErrorType TreeDumpToHtm(Tree* tree, FILE* htm_file, const char* folder_path, const char* folder_name)
-{
-    assert(tree);
-    assert(htm_file);
-    assert(folder_path);
-
-    time_t now = time(NULL);
-
-    WriteDumpHeader(htm_file, now);
-    WriteTreeInfo(htm_file, tree);
-
-    static int n_of_pictures = 0;
-
-    char temp_dot_global_path[kMaxLengthOfFilename] = {};
-    char temp_svg_global_path[kMaxLengthOfFilename] = {};
-    snprintf(temp_dot_global_path, sizeof(temp_dot_global_path), "%s/tree_%d%ld.dot",
-             folder_path, n_of_pictures, now);
-    snprintf(temp_svg_global_path, sizeof(temp_svg_global_path), "%s/tree_%d%ld.svg",
-             folder_path, n_of_pictures, now);
-
-    char temp_svg_local_path[kMaxLengthOfFilename] = {};
-    snprintf(temp_svg_local_path, sizeof(temp_svg_local_path), "%s/tree_%d%ld.svg",
-             folder_name, n_of_pictures, now);
-
-    n_of_pictures++;
-
-    TreeErrorType dot_result = GenerateDotFile(tree, temp_dot_global_path);
-    if (dot_result != TREE_ERROR_NO)
-        return dot_result;
-
-    char command[kMaxSystemCommandLength] = {};
-    snprintf(command, sizeof(command), "dot -Tsvg %s -o %s", temp_dot_global_path, temp_svg_global_path);
-    int result = system(command);
-
-    if (result == 0)
-    {
-        fprintf(htm_file, "<div style='text-align:center;'>\n");
-        fprintf(htm_file, "<img src='%s' style='max-width:100%%; border:1px solid #ddd;'>\n", temp_svg_local_path);
-        fprintf(htm_file, "</div>\n");
-    }
-    else
-    {
-        fprintf(htm_file, "<p style='color:red;'>Error generating SVG graph</p>\n");
     }
 
-    remove(temp_dot_global_path);
-
-    WriteDumpFooter(htm_file);
-    return TREE_ERROR_NO;
-}
-
-TreeErrorType GenerateDotFile(Tree* tree, const char* filename)
-{
-    assert(tree);
-    assert(filename);
-
-    FILE* dot_file = fopen(filename, "w");
-    if (!dot_file)
-        return TREE_ERROR_OPENING_FILE;
-
-    fprintf(dot_file, "digraph BinaryTree {\n");
-    fprintf(dot_file, "    rankdir=TB;\n");
-    fprintf(dot_file, "    node [shape=record, style=filled, color=black];\n\n");
-
-    CreateDotNodes(tree, dot_file);
-
-    if (tree->root != NULL)
+    Node* found = FindLeafByData(tree->root, object, false);
+    if (found == NULL)
     {
-        CreateTreeConnections(tree->root, dot_file);
-    }
-    else
-    {
-        fprintf(dot_file, "    empty [label=\"Empty Tree\", shape=plaintext];\n");
+        printf("Объект \"%s\" не найден в базе.\n", object);
+        return TREE_ERROR_NO;
     }
 
-    fprintf(dot_file, "}\n");
-    fclose(dot_file);
+    PathStep path[kMaxPathDepth] = {};
+    int step_count = 0;
+    Node* current = found;
 
-    return TREE_ERROR_NO;
-}
-
-static void CreateNodeRecursive(Node* node, Tree* tree, FILE* dot_file)
-{
-    if (node == NULL)
-        return;
-
-    const char* color = GetNodeColor(node, tree);
-
-    fprintf(dot_file, "    node_%p [label=\"{ {data: %d} | {address: %p} | {left %p| right %p| parent %p} }\", fillcolor=%s];\n",
-            (void*)node, node->data, (void*)node, (void*)node->left, (void*)node->right, (void*)node->parent, color);
-
-    CreateNodeRecursive(node->left,  tree, dot_file);
-    CreateNodeRecursive(node->right, tree, dot_file);
-}
-
-void CreateDotNodes(Tree* tree, FILE* dot_file)
-{
-    assert(tree);
-    assert(dot_file);
-
-    CreateNodeRecursive(tree->root, tree, dot_file);
-}
-
-void CreateTreeConnections(Node* node, FILE* dot_file)
-{
-    if (node == NULL)
-        return;
-
-    // чекаем связь с левым
-    if (node->left != NULL)
+    //поднимаемся от листа к корню
+    while (current->parent != NULL && step_count < kMaxPathDepth)
     {
-        // проверяем, что связь взаимная
-        if (node->left->parent == node)
+        Node* parent = current->parent;
+
+        if (parent->left == current)
         {
-            fprintf(dot_file, "    node_%p -> node_%p [color=blue, dir=both, arrowtail=normal, arrowhead=normal, label=\"L\"];\n",
-                    (void*)node, (void*)node->left);
+            path[step_count].question_node = parent;
+            path[step_count].answer = true;
+        }
+        else if (parent->right == current)
+        {
+            path[step_count].question_node = parent;
+            path[step_count].answer = false;
         }
         else
         {
-            fprintf(dot_file, "    node_%p -> node_%p [color=blue, label=\"L\"];\n",
-                    (void*)node, (void*)node->left);
-
-            fprintf(dot_file, "    error_parent_%p [shape=ellipse, style=filled, fillcolor=orange, label=\"Parent address Error\"];\n",
-                    (void*)node->left);
-            fprintf(dot_file, "    node_%p -> error_parent_%p [color=red];\n", (void*)node->left, (void*)node->left);
+            printf("Ошибка: нарушена структура дерева.\n");
+            return TREE_ERROR_STRUCTURE;
         }
-        CreateTreeConnections(node->left, dot_file);
+
+        step_count++;
+        current = parent;
     }
 
-    // чекаем связь с правым
-    if (node->right != NULL)
+    // выводим путь в правильном порядке
+    printf("\n=== ОПРЕДЕЛЕНИЕ ОБЪЕКТА \"%s\" ===\n", object);
+
+    if (step_count == 0)
     {
-        // проверяем на взаимность
-        if (node->right->parent == node)
-        {
-            fprintf(dot_file, "    node_%p -> node_%p [color=green, dir=both, arrowtail=normal, arrowhead=normal, label=\"R\"];\n",
-                    (void*)node, (void*)node->right);
-        }
-        else
-        {
-            fprintf(dot_file, "    node_%p -> node_%p [color=green, label=\"R\"];\n",
-                    (void*)node, (void*)node->right);
-
-            fprintf(dot_file, "    error_parent_%p [shape=ellipse, style=filled, fillcolor=orange, label=\"Parent address Error\"];\n",
-                    (void*)node->right);
-            fprintf(dot_file, "    node_%p -> error_parent_%p [color=red, style=dashed];\n", (void*)node->right, (void*)node->right);
-        }
-        CreateTreeConnections(node->right, dot_file);
-    }
-
-    // if (node->parent != NULL && node->parent->left != node && node->parent->right != node)
-    // {
-    //     fprintf(dot_file, "    node_%p -> node_%p [color=red, style=dashed, label=\"P\"];\n",
-    //             (void*)node, (void*)node->parent);
-    // }
-}
-
-const char* GetNodeColor(Node* node, Tree* tree)
-{
-    if (node == tree->root)
-        return "lightcoral"; // красный корень
-    else if (node->left == NULL && node->right == NULL)
-        return "lightgreen"; // листья
-    else
-        return "lightblue";
-}
-
-void WriteTreeInfo(FILE* htm_file, Tree* tree)
-{
-    assert(htm_file);
-    assert(tree);
-
-    fprintf(htm_file, "<div style='margin-bottom:15px;'>\n");
-    fprintf(htm_file, "<p><b>Tree Size:</b> %lu</p>\n", tree->size);
-
-    if (tree->root != NULL)
-    {
-        fprintf(htm_file, "<p><b>Root Address:</b> %p</p>\n", (void*)tree->root);
-        fprintf(htm_file, "<p><b>Root Data:</b> %d</p>\n", tree->root->data);
+        printf("Это корневой объект: %s\n", found->data);
     }
     else
     {
-        fprintf(htm_file, "<p><b>Root:</b> NULL</p>\n");
+        printf("Определение:\n");
+        for (int i = step_count - 1; i >= 0; i--)
+        {
+            if (path[i].answer)
+                printf("%s, ", path[i].question_node->data);
+            else
+                printf("HE %s, ", path[i].question_node->data);
+        }
+        printf("\n");
+        printf("Результат: %s\n", found->data);
     }
-
-    TreeVerifyResult verify_result = VerifyTree(tree); //FIXME
-    const char* verify_result_in_string = TreeVerifyResultToString(verify_result);
-    const char* verify_color = (verify_result == TREE_VERIFY_SUCCESS) ? "green" : "red";
-
-    fprintf(htm_file, "<p><b>Verify result:</b> <span style='color:%s; font-weight: bold;'>%s</span></p>\n",
-            verify_color, verify_result_in_string);
-
-    fprintf(htm_file, "</div>\n");
-}
-
-void WriteDumpHeader(FILE* htm_file, time_t now)
-{
-    assert(htm_file);
-
-    fprintf(htm_file, "<div style='border:2px solid #ccc; margin:10px; padding:15px; background:#f9f9f9;'>\n");
-    fprintf(htm_file, "<h2 style='color:#333;'>Tree Dump at %s</h2>\n", ctime(&now));
-}
-
-void WriteDumpFooter(FILE* htm_file)
-{
-    assert(htm_file);
-    fprintf(htm_file, "</div>\n\n");
-}
-
-TreeVerifyResult VerifyTree(Tree* tree) //FIXME дописать
-{
-    if (tree == NULL)
-        return TREE_VERIFY_NULL_PTR;
-
-    if (tree->root != NULL && tree->root->parent != NULL)
-        return TREE_VERIFY_INVALID_PARENT;
-
-    return TREE_VERIFY_SUCCESS;
-}
-
-const char* TreeVerifyResultToString(TreeVerifyResult result)
-{
-    switch (result)
-    {
-        case TREE_VERIFY_SUCCESS:          return "Success";
-        case TREE_VERIFY_NULL_PTR:         return "Null pointer";
-        case TREE_VERIFY_INVALID_PARENT:   return "Invalid parent pointer";
-        case TREE_VERIFY_CYCLE_DETECTED:   return "Cycle detected";           //FIXME проверить на циклы
-        default:                           return "Unknown error";
-    }
-}
-
-TreeErrorType InitTreeLog(const char* filename)
-{
-    assert(filename);
-
-    char htm_filename[kMaxLengthOfFilename] = {};
-    snprintf(htm_filename, sizeof(htm_filename), "%s/%s.htm", kGeneralFolderNameForLogs, filename);
-
-    FILE* htm_file = fopen(htm_filename, "w");
-    if (!htm_file)
-        return TREE_ERROR_OPENING_FILE;
-
-    fprintf(htm_file, "<!DOCTYPE html>\n"
-                      "<html>\n"
-                      "<head>\n"
-                      "<title>Tree Dump Log</title>\n"
-                      "<style>\n"
-                      "body { font-family: Arial, sans-serif; margin: 20px; }\n"
-                      "table { border-collapse: collapse; width: 100%%; }\n"
-                      "th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }\n"
-                      "th { background-color: #f2f2f2; }\n"
-                      "</style>\n"
-                      "</head>\n"
-                      "<body>\n"
-                      "<h1>Tree Dump Log</h1>\n");
-    fclose(htm_file);
+    printf("==================================\n\n");
 
     return TREE_ERROR_NO;
 }
 
-TreeErrorType CloseTreeLog(const char* filename)
+// поиск и вывод пути элемента (интерфейс для пользователя)
+void FindObjectDefinition(Tree* tree)
 {
-    assert(filename);
+    if (tree == NULL || tree->root == NULL)
+    {
+        printf("Дерево не инициализировано!\n");
+        return;
+    }
 
-    char htm_filename[kMaxLengthOfFilename] = {};
-    snprintf(htm_filename, sizeof(htm_filename), "%s/%s.htm", kGeneralFolderNameForLogs, filename);
+    char object_name[kMaxInputCapacity] = {};
+    SafeInputString(object_name, sizeof(object_name), "Введите название объекта для поиска: ");
 
-    FILE* htm_file = fopen(htm_filename, "a");
-    if (!htm_file)
-        return TREE_ERROR_OPENING_FILE;
-
-    fprintf(htm_file, "</body>\n");
-    fprintf(htm_file, "</html>\n");
-    fclose(htm_file);
-
-    return TREE_ERROR_NO;
+    PrintObjectPath(tree, object_name);
 }
