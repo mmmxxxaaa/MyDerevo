@@ -1,25 +1,33 @@
+#include "akinator_game.h"
+#include "io.h"
+#include "dump.h"
+#include "operations.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "my_derevo.h"
-#include "tree_error_types.h"
-#include "dump.h"
 
 int main()
 {
     Tree tree;
     TreeCtor(&tree);
+
     InitTreeLog("akinator");
+    InitTreeLog("akinator_parse");
 
     printf("=== АКИНАТОР ===\n");
 
-    Node* current = tree.root;
-    TreeAddQuestion(&tree, current, "Это животное?", "кошка", "неизвестно что");
-    current = current->right;
-    TreeAddQuestion(&tree, current, "Оно съедобное?", "торт", "неизвестно что");
-    current = current->right;
-    TreeAddQuestion(&tree, current, "Это посуда?", "ложка", "неизвестно что");
-    TreeDump(&tree, "akinator");
+    TreeErrorType load_result = TreeLoad(&tree, "akinator_tree.txt");
+    if (load_result != TREE_ERROR_NO)
+    {
+        printf("He удалось загрузить дерево из файла. Создаем новое дерево.\n");
+        Node* current = tree.root;
+        TreeAddQuestion(&tree, current, "Это животное?", "кошка", "неизвестно что");
+    }
+    else
+    {
+        printf("Дерево успешно загружено из файла.\n");
+    }
+
     int choice = 0;
     do {
         printf("\n Выберите действие:\n");
@@ -27,6 +35,8 @@ int main()
         printf("2. Дамп дерева (базовый)\n");
         printf("3. Визуализировать дерево (графически)\n");
         printf("4. Найти определение объекта\n");
+        printf("5. Сохранить дерево в файл\n");
+        printf("6. Загрузить дерево из файла\n");
         printf("0. Выход\n");
         printf("Выберите действие: ");
 
@@ -34,41 +44,44 @@ int main()
         {
             while (getchar() != '\n')
                 continue;
+            choice = -1;
         }
         while (getchar() != '\n');
 
         switch (choice)
         {
             case 1:
-                while (true)
-                {
-                    PlayAkinator(&tree);
-                    TreeDump(&tree, "akinator");
-                    printf("\n Играем еще раз? (да/нет): ");
-
-                    char play_again[kMaxInputCapacity] = {};
-                    if (fgets(play_again, sizeof(play_again), stdin) == NULL)
-                        break;
-
-                    ToLowerCase(play_again);
-                    if (strcmp(play_again, "да") != 0 && strcmp(play_again, "д") != 0 && strcmp(play_again, "yes") != 0 && strcmp(play_again, "y") != 0)
-                        break;
-
-                    printf("\n");
-                }
+                PlayAkinator(&tree);
                 break;
             case 2:
                 TreeBaseDump(&tree);
                 break;
             case 3:
-                TreeDump(&tree, "akinator");
+                TreeDump(&tree, "akinator", NULL, 0);
                 printf("Дерево визуализировано.\n");
                 break;
             case 4:
                 FindObjectDefinition(&tree);
                 break;
+            case 5:
+                if (TreeSave(&tree, "akinator_tree.txt") == TREE_ERROR_NO)
+                    printf("Дерево сохранено в файл 'akinator_tree.txt'\n");
+                else
+                    printf("Ошибка сохранения дерева!\n");
+                break;
+            case 6:
+                if (TreeLoad(&tree, "akinator_tree.txt") == TREE_ERROR_NO)
+                {
+                    printf("Дерево загружено из файла 'akinator_tree.txt'\n");
+                }
+                else
+                {
+                    printf("Ошибка загрузки дерева!\n");
+                }
+                break;
             case 0:
                 printf("Выход...\n");
+                TreeSave(&tree, "akinator_tree.txt");
                 break;
             default:
                 printf("Неверный выбор!\n");
@@ -76,11 +89,8 @@ int main()
     } while (choice != 0);
 
     CloseTreeLog("akinator");
+    CloseTreeLog("akinator_parse");
+
     TreeDtor(&tree);
     return 0;
 }
-
-
-
-
-

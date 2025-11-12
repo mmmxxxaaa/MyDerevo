@@ -7,7 +7,7 @@
 #include <string.h>
 #include "tree_error_types.h"
 
-static TreeErrorType PrintTreeNode(const Node* node) //скобочная нотация (постордер?) название забыл
+static TreeErrorType PrintTreeNode(const Node* node)
 {
     if (node == NULL)
     {
@@ -83,39 +83,6 @@ TreeErrorType GenerateDotFile(Tree* tree, const char* filename)
     return TREE_ERROR_NO;
 }
 
-// FIXME экранируем кавычки и символ перевода строки чтобы синтаксис дота не нарушался
-static void EscapeStringForDot(const char* str, char* buffer, size_t buffer_size)
-{
-    if (str == NULL || buffer == NULL)
-        return;
-
-    size_t j = 0;
-    for (size_t i = 0; str[i] != '\0' && j < buffer_size - 1; i++)
-    {
-        if (str[i] == '"')
-        {
-            if (j + 2 < buffer_size)
-            {
-                buffer[j++] = '\\';
-                buffer[j++] = '"';
-            }
-        }
-        else if (str[i] == '\n')
-        {
-            if (j + 2 < buffer_size)
-            {
-                buffer[j++] = '\\';
-                buffer[j++] = 'n';
-            }
-        }
-        else
-        {
-            buffer[j++] = str[i];
-        }
-    }
-    buffer[j] = '\0';
-}
-
 static void CreateNodeRecursive(Node* node, Tree* tree, FILE* dot_file)
 {
     if (node == NULL)
@@ -123,19 +90,9 @@ static void CreateNodeRecursive(Node* node, Tree* tree, FILE* dot_file)
 
     const char* color = GetNodeColor(node, tree);
 
-    // FIXME
-    char escaped_data[256] = {0};
-    if (node->data != NULL)
-    {
-        EscapeStringForDot(node->data, escaped_data, sizeof(escaped_data));
-    }
-    else
-    {
-        strcpy(escaped_data, "NULL");
-    }
-
     fprintf(dot_file, "    node_%p [label=\"{ {data: %s} | {address: %p} | {left %p| right %p| parent %p} }\", fillcolor=%s];\n",
-            (void*)node, escaped_data, (void*)node, (void*)node->left, (void*)node->right, (void*)node->parent, color);
+            (void*)node, node->data ? node->data : "NULL", (void*)node,
+            (void*)node->left, (void*)node->right, (void*)node->parent, color);
 
     CreateNodeRecursive(node->left,  tree, dot_file);
     CreateNodeRecursive(node->right, tree, dot_file);
@@ -154,10 +111,8 @@ void CreateTreeConnections(Node* node, FILE* dot_file)
     if (node == NULL)
         return;
 
-    // чекаем связь с левым
     if (node->left != NULL)
     {
-        // проверяем, что связь взаимная
         if (node->left->parent == node)
         {
             fprintf(dot_file, "    node_%p -> node_%p [color=blue, dir=both, arrowtail=normal, arrowhead=normal, label=\"L\"];\n",
@@ -175,10 +130,8 @@ void CreateTreeConnections(Node* node, FILE* dot_file)
         CreateTreeConnections(node->left, dot_file);
     }
 
-    // чекаем связь с правым
     if (node->right != NULL)
     {
-        // проверяем на взаимность
         if (node->right->parent == node)
         {
             fprintf(dot_file, "    node_%p -> node_%p [color=green, dir=both, arrowtail=normal, arrowhead=normal, label=\"R\"];\n",
@@ -195,48 +148,98 @@ void CreateTreeConnections(Node* node, FILE* dot_file)
         }
         CreateTreeConnections(node->right, dot_file);
     }
-
-    // if (node->parent != NULL && node->parent->left != node && node->parent->right != node)
-    // {
-    //     fprintf(dot_file, "    node_%p -> node_%p [color=red, style=dashed, label=\"P\"];\n",
-    //             (void*)node, (void*)node->parent);
-    // }
 }
 
 const char* GetNodeColor(Node* node, Tree* tree)
 {
     if (node == tree->root)
-        return "lightcoral"; // красный корень
+        return "lightcoral";
     else if (node->left == NULL && node->right == NULL)
-        return "lightgreen"; // листья
+        return "lightgreen";
     else
         return "lightblue";
 }
 
-void WriteTreeInfo(FILE* htm_file, Tree* tree)
+static void WriteHighlightedBuffer(FILE* htm_file, const char* buffer, size_t pos) //FIXME пока хуйня полная
+{
+    if (buffer == NULL || htm_file == NULL)
+        return;
+
+    fprintf(htm_file, "<div style='margin:10px 0; padding:10px; background:#f5f5f5; border:1px solid #ddd; font-family:monospace; font-size:14px;'>\n");
+    fprintf(htm_file, "<p style='margin:0 0 5px 0; font-weight:bold;'>Текущая позиция в буфере: %lu</p>\n", pos);
+    fprintf(htm_file, "<div style='background:white; padding:8px; border:1px solid #ccc; word-wrap:break-word;'>\n");
+
+    // левая часть (до pos) в серый
+    if (pos > 0)
+        fprintf(htm_file, "<span style='color:#666;'>%.*s</span>", (int)pos, buffer);
+
+    // сам pos в красный
+    if (pos < strlen(buffer))
+        fprintf(htm_file, "<span style='color:red; font-weight:bold; background:#ffe6e6; padding:1px 3px; border:1px solid #ff9999; border-radius:2px;'>%c</span>",
+                buffer[pos]);
+    else
+        fprintf(htm_file, "<span style='color:red; font-weight:bold; background:#ffe6e6; padding:1px 3px; border:1px solid #ff9999; border-radius:2px;'>КОНЕЦ</span>");
+
+    // правая часть (после pos) в серый
+    if (pos + 1 < strlen(buffer))
+        fprintf(htm_file, "<span style='color:#0066cc;'>%s</span>", buffer + pos + 1);
+
+    fprintf(htm_file, "</div>\n");
+
+    // сам индикатор
+    fprintf(htm_file, "<div style='margin-top:5px; text-align:left; font-family:monospace;'>");
+    for (size_t i = 0; i < pos && i < 100; i++)
+        fprintf(htm_file, "&nbsp;");
+
+    fprintf(htm_file, "<span style='color:red; font-weight:bold;'>↑</span>");
+    fprintf(htm_file, "<span style='color:red; margin-left:5px;'>позиция %lu</span>", pos);
+    fprintf(htm_file, "</div>\n");
+
+    fprintf(htm_file, "</div>\n");
+}
+
+void WriteTreeInfo(FILE* htm_file, Tree* tree, const char* buffer, size_t buffer_pos)
 {
     assert(htm_file);
-    assert(tree);
 
     fprintf(htm_file, "<div style='margin-bottom:15px;'>\n");
-    fprintf(htm_file, "<p><b>Tree Size:</b> %lu</p>\n", tree->size);
 
-    if (tree->root != NULL)
+    if (tree != NULL)
     {
-        fprintf(htm_file, "<p><b>Root Address:</b> %p</p>\n", (void*)tree->root);
-        fprintf(htm_file, "<p><b>Root Data:</b> %s</p>\n", tree->root->data); //FIXME экранировать
+        fprintf(htm_file, "<p><b>Размер дерева:</b> %lu</p>\n", tree->size);
+
+        if (tree->root != NULL)
+        {
+            fprintf(htm_file, "<p><b>Адрес корня:</b> %p</p>\n", (void*)tree->root);
+            fprintf(htm_file, "<p><b>Данные корня:</b> %s</p>\n", tree->root->data ? tree->root->data : "NULL");
+        }
+        else
+        {
+            fprintf(htm_file, "<p><b>Корень:</b> NULL</p>\n");
+        }
     }
     else
     {
-        fprintf(htm_file, "<p><b>Root:</b> NULL</p>\n");
+        fprintf(htm_file, "<p><b>Дерево:</b> NULL (парсинг в процессе)</p>\n");
     }
 
-    TreeVerifyResult verify_result = VerifyTree(tree); //FIXME
-    const char* verify_result_in_string = TreeVerifyResultToString(verify_result);
-    const char* verify_color = (verify_result == TREE_VERIFY_SUCCESS) ? "green" : "red";
+    if (buffer != NULL)
+        WriteHighlightedBuffer(htm_file, buffer, buffer_pos);
 
-    fprintf(htm_file, "<p><b>Verify result:</b> <span style='color:%s; font-weight: bold;'>%s</span></p>\n",
-            verify_color, verify_result_in_string);
+
+    if (tree != NULL)
+    {
+        TreeVerifyResult verify_result = VerifyTree(tree);
+        const char* verify_result_in_string = TreeVerifyResultToString(verify_result);
+        const char* verify_color = (verify_result == TREE_VERIFY_SUCCESS) ? "green" : "red";
+
+        fprintf(htm_file, "<p><b>Результат проверки:</b> <span style='color:%s; font-weight: bold;'>%s</span></p>\n",
+                verify_color, verify_result_in_string);
+    }
+    else
+    {
+        fprintf(htm_file, "<p><b>Результат проверки:</b> <span style='color:gray; font-weight: bold;'>N/A (парсинг)</span></p>\n");
+    }
 
     fprintf(htm_file, "</div>\n");
 }
@@ -255,58 +258,66 @@ void WriteDumpFooter(FILE* htm_file)
     fprintf(htm_file, "</div>\n\n");
 }
 
-TreeErrorType TreeDumpToHtm(Tree* tree, FILE* htm_file, const char* folder_path, const char* folder_name)
+TreeErrorType TreeDumpToHtm(Tree* tree, FILE* htm_file, const char* folder_path, const char* folder_name, const char* buffer, size_t buffer_pos)
 {
-    assert(tree);
     assert(htm_file);
     assert(folder_path);
 
     time_t now = time(NULL);
 
     WriteDumpHeader(htm_file, now);
-    WriteTreeInfo(htm_file, tree);
+    WriteTreeInfo(htm_file, tree, buffer, buffer_pos);
 
-    static int n_of_pictures = 0;
-
-    char temp_dot_global_path[kMaxLengthOfFilename] = {};
-    char temp_svg_global_path[kMaxLengthOfFilename] = {};
-    snprintf(temp_dot_global_path, sizeof(temp_dot_global_path), "%s/tree_%d%ld.dot",
-             folder_path, n_of_pictures, now);
-    snprintf(temp_svg_global_path, sizeof(temp_svg_global_path), "%s/tree_%d%ld.svg",
-             folder_path, n_of_pictures, now);
-
-    char temp_svg_local_path[kMaxLengthOfFilename] = {};
-    snprintf(temp_svg_local_path, sizeof(temp_svg_local_path), "%s/tree_%d%ld.svg",
-             folder_name, n_of_pictures, now);
-
-    n_of_pictures++;
-
-    TreeErrorType dot_result = GenerateDotFile(tree, temp_dot_global_path);
-    if (dot_result != TREE_ERROR_NO)
-        return dot_result;
-
-    char command[kMaxSystemCommandLength] = {};
-    snprintf(command, sizeof(command), "dot -Tsvg %s -o %s", temp_dot_global_path, temp_svg_global_path);
-    int result = system(command);
-
-    if (result == 0)
+    if (tree != NULL && tree->root != NULL)
     {
-        fprintf(htm_file, "<div style='text-align:center;'>\n");
-        fprintf(htm_file, "<img src='%s' style='max-width:100%%; border:1px solid #ddd;'>\n", temp_svg_local_path);
-        fprintf(htm_file, "</div>\n");
+        static int n_of_pictures = 0;
+
+        char temp_dot_global_path[kMaxLengthOfFilename] = {};
+        char temp_svg_global_path[kMaxLengthOfFilename] = {};
+        snprintf(temp_dot_global_path, sizeof(temp_dot_global_path), "%s/tree_%d.dot",
+                 folder_path, n_of_pictures);
+        snprintf(temp_svg_global_path, sizeof(temp_svg_global_path), "%s/tree_%d.svg",
+                 folder_path, n_of_pictures);
+
+        char temp_svg_local_path[kMaxLengthOfFilename] = {};
+        snprintf(temp_svg_local_path, sizeof(temp_svg_local_path), "%s/tree_%d.svg",
+                 folder_name, n_of_pictures);
+
+        n_of_pictures++;
+
+        TreeErrorType dot_result = GenerateDotFile(tree, temp_dot_global_path);
+        if (dot_result != TREE_ERROR_NO)
+            return dot_result;
+
+        char command[kMaxSystemCommandLength] = {};
+        snprintf(command, sizeof(command), "dot -Tsvg \"%s\" -o \"%s\"",
+                 temp_dot_global_path, temp_svg_global_path);
+
+        int result = system(command);
+
+        if (result == 0)
+        {
+            fprintf(htm_file, "<div style='text-align:center;'>\n");
+            fprintf(htm_file, "<img src='%s' style='max-width:100%%; border:1px solid #ddd;'>\n", temp_svg_local_path);
+            fprintf(htm_file, "</div>\n");
+        }
+        else
+        {
+            fprintf(htm_file, "<p style='color:red;'>Error generating SVG graph</p>\n");
+        }
+
+        remove(temp_dot_global_path);
     }
     else
     {
-        fprintf(htm_file, "<p style='color:red;'>Error generating SVG graph</p>\n");
+        fprintf(htm_file, "<p style='color:blue;'>No tree to visualize (parsing in progress)</p>\n");
     }
-
-    remove(temp_dot_global_path);
 
     WriteDumpFooter(htm_file);
     return TREE_ERROR_NO;
 }
 
-TreeErrorType TreeDump(Tree* tree, const char* filename)
+TreeErrorType TreeDump(Tree* tree, const char* filename, const char* buffer, size_t buffer_pos)
 {
     if (tree == NULL)
         return TREE_ERROR_NULL_PTR;
@@ -331,7 +342,7 @@ TreeErrorType TreeDump(Tree* tree, const char* filename)
     if (!htm_file)
         return TREE_ERROR_OPENING_FILE;
 
-    TreeErrorType result = TreeDumpToHtm(tree, htm_file, folder_path, folder_name);
+    TreeErrorType result = TreeDumpToHtm(tree, htm_file, folder_path, folder_name, buffer, buffer_pos);
 
     fclose(htm_file);
     return result;
@@ -384,7 +395,7 @@ TreeErrorType CloseTreeLog(const char* filename)
     return TREE_ERROR_NO;
 }
 
-TreeVerifyResult VerifyTree(Tree* tree) //FIXME дописать
+TreeVerifyResult VerifyTree(Tree* tree)
 {
     if (tree == NULL)
         return TREE_VERIFY_NULL_PTR;
@@ -402,7 +413,7 @@ const char* TreeVerifyResultToString(TreeVerifyResult result)
         case TREE_VERIFY_SUCCESS:          return "Success";
         case TREE_VERIFY_NULL_PTR:         return "Null pointer";
         case TREE_VERIFY_INVALID_PARENT:   return "Invalid parent pointer";
-        case TREE_VERIFY_CYCLE_DETECTED:   return "Cycle detected";           //FIXME проверить на циклы
+        case TREE_VERIFY_CYCLE_DETECTED:   return "Cycle detected";
         default:                           return "Unknown error";
     }
 }
