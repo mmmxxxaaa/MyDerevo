@@ -290,7 +290,7 @@ TreeErrorType TreeDumpToHtm(Tree* tree, FILE* htm_file, const char* folder_path,
             return dot_result;
 
         char command[kMaxSystemCommandLength] = {};
-        snprintf(command, sizeof(command), "dot -Tsvg \"%s\" -o \"%s\"",
+        snprintf(command, sizeof(command), "dot -Tsvg -Gcharset=utf8 \"%s\" -o \"%s\"",
                  temp_dot_global_path, temp_svg_global_path);
 
         int result = system(command);
