@@ -17,11 +17,12 @@ int main()
     printf("=== АКИНАТОР ===\n");
 
     TreeErrorType load_result = TreeLoad(&tree, "akinator_tree.txt");
+    // TreeErrorType load_result = TREE_ERROR_NULL_PTR;
     if (load_result != TREE_ERROR_NO)
     {
         printf("He удалось загрузить дерево из файла. Создаем новое дерево.\n");
         Node* current = tree.root;
-        TreeAddQuestion(&tree, current, "Это животное?", "кошка", "неизвестно что");
+        TreeAddQuestion(&tree, current, "Это животное?", "кошка"); //ПОФИКСИТЬ ЭТО, сделать так, чтобы создавался хотя бы 1 вопрос
     }
     else
     {
@@ -57,7 +58,7 @@ int main()
                 TreeBaseDump(&tree);
                 break;
             case 3:
-                TreeDump(&tree, "akinator", NULL, 0);
+                TreeDump(&tree, "akinator");
                 printf("Дерево визуализировано.\n");
                 break;
             case 4:
@@ -71,13 +72,9 @@ int main()
                 break;
             case 6:
                 if (TreeLoad(&tree, "akinator_tree.txt") == TREE_ERROR_NO)
-                {
                     printf("Дерево загружено из файла 'akinator_tree.txt'\n");
-                }
                 else
-                {
                     printf("Ошибка загрузки дерева!\n");
-                }
                 break;
             case 0:
                 printf("Выход...\n");

@@ -7,9 +7,43 @@
 #include "dump.h"
 #include "tree_base.h"
 
+void InitLoadProgress(LoadProgress* progress)
+{
+    progress->capacity      = 10;
+    progress->size          = 0;
+    progress->current_depth = 0;
+    progress->nodes         = (Node**)calloc(progress->capacity, sizeof(Node*));
+    progress->depths        = (size_t*)calloc(progress->capacity, sizeof(size_t));
+}
+
+void AddNodeToLoadProgress(LoadProgress* progress, Node* node, size_t depth)
+{
+    if (progress->size >= progress->capacity)
+    {
+        progress->capacity *= 2;
+        progress->nodes     = (Node**)realloc(progress->nodes, progress->capacity * sizeof(Node*));
+        progress->depths    = (size_t*)realloc(progress->depths, progress->capacity * sizeof(size_t));
+    }
+    progress->nodes[progress->size]  = node;
+    progress->depths[progress->size] = depth;
+    progress->size++;
+}
+
+void FreeLoadProgress(LoadProgress* progress)
+{
+    free(progress->nodes);
+    free(progress->depths);
+
+    progress->nodes = NULL;
+    progress->depths = NULL;
+    progress->capacity = 0;
+    progress->size = 0;
+    progress->current_depth = 0;
+}
+
 static void SkipSpaces(const char* buffer, size_t* pos)
 {
-    while (buffer[*pos] == ' ' || buffer[*pos] == '\t' || buffer[*pos] == '\n' || buffer[*pos] == '\r')
+    while (isspace(buffer[*pos]))
         (*pos)++;
 }
 
@@ -34,12 +68,9 @@ static const char* ReadQuotedString(const char* buffer, size_t* pos, size_t* len
     return buffer + start;
 }
 
-static Node* ReadNodeFromBuffer(Tree* tree, const char* buffer, size_t* pos, Node* parent, char* string_pool, size_t* pool_pos, int depth)
+static Node* ReadNodeFromBuffer(Tree* tree, const char* buffer, size_t* pos, Node* parent,
+                                char* string_pool, size_t* pool_pos, int depth, LoadProgress* progress)
 {
-    char depth_info[64]; //FIXME в конст потом
-    snprintf(depth_info, sizeof(depth_info), "Глубина: %d", depth);
-    TreeDump(tree, "akinator_parse", buffer, *pos);
-
     SkipSpaces(buffer, pos);
 
     if (buffer[*pos] == '\0')
@@ -48,7 +79,6 @@ static Node* ReadNodeFromBuffer(Tree* tree, const char* buffer, size_t* pos, Nod
     if (strncmp(buffer + *pos, "nil", 3) == 0)
     {
         *pos += 3;
-        TreeDump(tree, "akinator_parse", buffer, *pos);
         return NULL;
     }
 
@@ -56,16 +86,12 @@ static Node* ReadNodeFromBuffer(Tree* tree, const char* buffer, size_t* pos, Nod
         return NULL;
 
     (*pos)++;
-    TreeDump(tree, "akinator_parse", buffer, *pos);
-
     SkipSpaces(buffer, pos);
 
     size_t str_len = 0;
     const char* str_ptr = ReadQuotedString(buffer, pos, &str_len);
     if (str_ptr == NULL)
         return NULL;
-
-    TreeDump(tree, "akinator_parse", buffer, *pos);
 
     char* pooled_string = string_pool + *pool_pos;
     strncpy(pooled_string, str_ptr, str_len);
@@ -79,17 +105,19 @@ static Node* ReadNodeFromBuffer(Tree* tree, const char* buffer, size_t* pos, Nod
     if (tree != NULL)
         tree->size++;
 
-    TreeDump(tree, "akinator_parse", buffer, *pos);
+    if (progress != NULL)
+    {
+        AddNodeToLoadProgress(progress, node, depth);
+        TreeLoadDump(tree, "akinator_parse", buffer, *pos, progress, "Node created");
+    }
 
     SkipSpaces(buffer, pos);
 
-    TreeDump(tree, "akinator_parse", buffer, *pos);
-    node->left = ReadNodeFromBuffer(tree, buffer, pos, node, string_pool, pool_pos, depth + 1);
+    node->left = ReadNodeFromBuffer(tree, buffer, pos, node, string_pool, pool_pos, depth + 1, progress);
 
     SkipSpaces(buffer, pos);
 
-    TreeDump(tree, "akinator_parse", buffer, *pos);
-    node->right = ReadNodeFromBuffer(tree, buffer, pos, node, string_pool, pool_pos, depth + 1);
+    node->right = ReadNodeFromBuffer(tree, buffer, pos, node, string_pool, pool_pos, depth + 1, progress);
 
     SkipSpaces(buffer, pos);
 
@@ -100,7 +128,8 @@ static Node* ReadNodeFromBuffer(Tree* tree, const char* buffer, size_t* pos, Nod
     }
     (*pos)++;
 
-    TreeDump(tree, "akinator_parse", buffer, *pos);
+    if (progress != NULL)
+        TreeLoadDump(tree, "akinator_parse", buffer, *pos, progress, "Subtree complete");
 
     return node;
 }
@@ -144,21 +173,25 @@ TreeErrorType TreeLoad(Tree* tree, const char* filename)
 
     TreeDtor(tree);
 
+    //с началом процесса загрузки начинаем отслеживать ступени создания дерева
+    LoadProgress progress = {};
+    InitLoadProgress(&progress);
+
     size_t pos = 0;
-
-    TreeDump(tree, "akinator_parse", file_buffer, pos);
-
-    tree->root = ReadNodeFromBuffer(tree, file_buffer, &pos, NULL, string_pool, &pool_pos, 0);
-
-    TreeDump(tree, "akinator", file_buffer, pos);
+    tree->root = ReadNodeFromBuffer(tree, file_buffer, &pos, NULL, string_pool, &pool_pos, 0, &progress);
 
     if (tree->root == NULL)
     {
         free(buffer_and_pool);
+        FreeLoadProgress(&progress);
         return TREE_ERROR_FORMAT;
     }
 
     tree->file_buffer = buffer_and_pool;
+
+    TreeDump(tree, "akinator"); //финальный дамп после загрузки базы данных
+
+    FreeLoadProgress(&progress);
 
     return TREE_ERROR_NO;
 }

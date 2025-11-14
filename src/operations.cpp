@@ -7,11 +7,9 @@
 #include "io.h"
 #include "dump.h"
 
-TreeErrorType TreeAddQuestion(Tree* tree, Node* current_node, const char* question,
-                             const char* new_object, const char* old_object)
+TreeErrorType TreeAddQuestion(Tree* tree, Node* current_node, const char* question, const char* new_object)
 {
-    if (tree == NULL || current_node == NULL || question == NULL ||
-        new_object == NULL || old_object == NULL)
+    if (tree == NULL || current_node == NULL || question == NULL || new_object == NULL)
         return TREE_ERROR_NULL_PTR;
 
     TreeElement old_data = current_node->data;
@@ -22,27 +20,23 @@ TreeErrorType TreeAddQuestion(Tree* tree, Node* current_node, const char* questi
         return TREE_ERROR_ALLOCATION;
     current_node->is_dynamic = true;
 
-    current_node->left = CreateNode(strdup(new_object), current_node, true);
-    current_node->right = CreateNode(strdup(old_object), current_node, true);
+    current_node->left  = CreateNode(strdup(new_object), current_node, true);
+    current_node->right = CreateNode(strdup(old_data),   current_node, true);
 
     if (current_node->left == NULL || current_node->right == NULL)
     {
-        free((void*)current_node->data); //FIXME чет какая-то хуйня как будто
+        free((void*)current_node->data);
         current_node->data = old_data;
         current_node->is_dynamic = old_is_dynamic;
 
         if (current_node->left)
         {
-            if (current_node->left->is_dynamic && current_node->left->data)
-                free((void*)current_node->left->data);
-
+            free((void*)current_node->left->data);
             free(current_node->left);
         }
         if (current_node->right)
         {
-            if (current_node->right->is_dynamic && current_node->right->data)
-                free((void*)current_node->right->data);
-
+            free((void*)current_node->right->data);
             free(current_node->right);
         }
         current_node->left = current_node->right = NULL;
@@ -54,97 +48,48 @@ TreeErrorType TreeAddQuestion(Tree* tree, Node* current_node, const char* questi
 
     tree->size += 2;
 
-    char dump_buffer[512]; //FIXME потом в константу мб общую с чем-то
-    snprintf(dump_buffer, sizeof(dump_buffer), "Добавлен вопрос: '%s'\n Новый объект: '%s'\n Старый объект: '%s'",
-             question, new_object, old_object);
-
-    TreeDump(tree, "akinator", dump_buffer, 0);
+    TreeDump(tree, "akinator");
 
     return TREE_ERROR_NO;
 }
-TreeErrorType TreeInsert(Tree* tree, const char* value)
+
+Node* FindLeafByData(Node* node, const char* data)
 {
-    if (tree == NULL)
-        return TREE_ERROR_NULL_PTR;
+    assert(data);
 
-    char* value_copy = NULL;
-    if (value != NULL)
-    {
-        value_copy = (char*)calloc(strlen(value) + 1, sizeof(char));
-        if (value_copy == NULL)
-            return TREE_ERROR_ALLOCATION;
-        strcpy(value_copy, value);
-    }
-
-    if (tree->root == NULL)
-    {
-        tree->root = CreateNode(value_copy, NULL, true);
-        if (tree->root == NULL)
-        {
-            free(value_copy);
-            return TREE_ERROR_ALLOCATION;
-        }
-        tree->size++;
-        return TREE_ERROR_NO;
-    }
-
-    Node* current = tree->root;
-    while (current->left != NULL)
-        current = current->left;
-
-    current->left = CreateNode(value_copy, current, true);
-    if (current->left == NULL)
-    {
-        free(value_copy);
-        return TREE_ERROR_ALLOCATION;
-    }
-
-    tree->size++;
-    return TREE_ERROR_NO;
-}
-
-Node* FindLeafByData(Node* node, const char* data, bool case_sensitive)
-{
     if (node == NULL)
         return NULL;
 
     if (IsLeaf(node))
     {
-        int compare_result = 0;
-        if (case_sensitive)
+        char* node_data_lower = (char*)calloc(strlen(node->data) + 1, sizeof(char));
+        char* data_lower = (char*)calloc(strlen(data) + 1, sizeof(char));
+        if (node_data_lower == NULL || data_lower == NULL)
         {
-            compare_result = strcmp(node->data, data);
-        }
-        else
-        {
-            char* node_data_lower = (char*)calloc(strlen(node->data) + 1, sizeof(char));
-            char* data_lower = (char*)calloc(strlen(data) + 1, sizeof(char));
-            if (node_data_lower == NULL || data_lower == NULL)
-            {
-                free(node_data_lower);
-                free(data_lower);
-                return NULL;
-            }
-
-            strcpy(node_data_lower, node->data);
-            strcpy(data_lower, data);
-            ToLowerCase(node_data_lower);
-            ToLowerCase(data_lower);
-            compare_result = strcmp(node_data_lower, data_lower);
-
             free(node_data_lower);
             free(data_lower);
+            return NULL;
         }
+
+        strcpy(node_data_lower, node->data);
+        strcpy(data_lower, data);
+        ToLowerCase(node_data_lower);
+        ToLowerCase(data_lower);
+
+        int compare_result = strcmp(node_data_lower, data_lower);
+
+        free(node_data_lower);
+        free(data_lower);
 
         if (compare_result == 0)
             return node;
     }
 
-    Node* left_result = FindLeafByData(node->left, data, case_sensitive);
+    Node* left_result = FindLeafByData(node->left, data);
     if (left_result != NULL)
         return left_result;
 
-    Node* right_result = FindLeafByData(node->right, data, case_sensitive);
+    Node* right_result = FindLeafByData(node->right, data);
     return right_result;
 }
 
@@ -156,7 +101,7 @@ TreeErrorType PrintObjectPath(Tree* tree, const char* object)
         return TREE_ERROR_NULL_PTR;
     }
 
-    Node* found = FindLeafByData(tree->root, object, false);
+    Node* found = FindLeafByData(tree->root, object);
     if (found == NULL)
     {
         printf("Объект \"%s\" не найден в базе.\n", object);

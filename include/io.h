@@ -1,8 +1,12 @@
-#ifndef TREE_IO_H_
-#define TREE_IO_H_
+#ifndef IO_H
+#define IO_H
 
-#include "tree_common.h"
-#include "tree_error_types.h"
+#include "tree_base.h"
+#include <stdbool.h>
+
+void InitLoadProgress(LoadProgress* progress);
+void AddNodeToLoadProgress(LoadProgress* progress, Node* node, size_t depth);
+void FreeLoadProgress(LoadProgress* progress);
 
 TreeErrorType TreeLoad(Tree* tree, const char* filename);
 TreeErrorType TreeSave(const Tree* tree, const char* filename);
@@ -12,5 +16,4 @@ void ToLowerCase(char* string);
 void ClearInputBuffer();
 bool GetUserAnswer(const char* question);
 
-#endif //TREE_IO_H_
-
+#endif

@@ -41,13 +41,9 @@ TreeErrorType TreeBaseDump(Tree* tree)
     printf("Tree structure:\n");
 
     if (tree->root == NULL)
-    {
         printf("EMPTY TREE");
-    }
     else
-    {
         PrintTreeNode(tree->root);
-    }
 
     putchar('\n');
     return TREE_ERROR_NO;
@@ -69,13 +65,9 @@ TreeErrorType GenerateDotFile(Tree* tree, const char* filename)
     CreateDotNodes(tree, dot_file);
 
     if (tree->root != NULL)
-    {
         CreateTreeConnections(tree->root, dot_file);
-    }
     else
-    {
         fprintf(dot_file, "    empty [label=\"Empty Tree\", shape=plaintext];\n");
-    }
 
     fprintf(dot_file, "}\n");
     fclose(dot_file);
@@ -160,7 +152,7 @@ const char* GetNodeColor(Node* node, Tree* tree)
         return "lightblue";
 }
 
-static void WriteHighlightedBuffer(FILE* htm_file, const char* buffer, size_t pos) //FIXME пока хуйня полная
+static void WriteHighlightedBuffer(FILE* htm_file, const char* buffer, size_t pos)
 {
     if (buffer == NULL || htm_file == NULL)
         return;
@@ -169,30 +161,26 @@ static void WriteHighlightedBuffer(FILE* htm_file, const char* buffer, size_t po
     fprintf(htm_file, "<p style='margin:0 0 5px 0; font-weight:bold;'>Текущая позиция в буфере: %lu</p>\n", pos);
     fprintf(htm_file, "<div style='background:white; padding:8px; border:1px solid #ccc; word-wrap:break-word;'>\n");
 
-    // левая часть (до pos) в серый
     if (pos > 0)
         fprintf(htm_file, "<span style='color:#666;'>%.*s</span>", (int)pos, buffer);
 
-    // сам pos в красный
     if (pos < strlen(buffer))
         fprintf(htm_file, "<span style='color:red; font-weight:bold; background:#ffe6e6; padding:1px 3px; border:1px solid #ff9999; border-radius:2px;'>%c</span>",
                 buffer[pos]);
     else
         fprintf(htm_file, "<span style='color:red; font-weight:bold; background:#ffe6e6; padding:1px 3px; border:1px solid #ff9999; border-radius:2px;'>КОНЕЦ</span>");
 
-    // правая часть (после pos) в серый
     if (pos + 1 < strlen(buffer))
         fprintf(htm_file, "<span style='color:#0066cc;'>%s</span>", buffer + pos + 1);
 
     fprintf(htm_file, "</div>\n");
 
-    // сам индикатор
     fprintf(htm_file, "<div style='margin-top:5px; text-align:left; font-family:monospace;'>");
     for (size_t i = 0; i < pos && i < 100; i++)
         fprintf(htm_file, "&nbsp;");
 
-    fprintf(htm_file, "<span style='color:red; font-weight:bold;'>↑</span>");
-    fprintf(htm_file, "<span style='color:red; margin-left:5px;'>позиция %lu</span>", pos);
+    // fprintf(htm_file, "<span style='color:red; font-weight:bold;'>↑</span>");
+    // fprintf(htm_file, "<span style='color:red; margin-left:5px;'>позиция %lu</span>", pos);
     fprintf(htm_file, "</div>\n");
 
     fprintf(htm_file, "</div>\n");
@@ -226,7 +214,6 @@ void WriteTreeInfo(FILE* htm_file, Tree* tree, const char* buffer, size_t buffer
     if (buffer != NULL)
         WriteHighlightedBuffer(htm_file, buffer, buffer_pos);
 
-
     if (tree != NULL)
     {
         TreeVerifyResult verify_result = VerifyTree(tree);
@@ -244,12 +231,19 @@ void WriteTreeInfo(FILE* htm_file, Tree* tree, const char* buffer, size_t buffer
     fprintf(htm_file, "</div>\n");
 }
 
-void WriteDumpHeader(FILE* htm_file, time_t now)
+void WriteDumpHeader(FILE* htm_file, time_t now, const char* comment)
 {
     assert(htm_file);
 
     fprintf(htm_file, "<div style='border:2px solid #ccc; margin:10px; padding:15px; background:#f9f9f9;'>\n");
     fprintf(htm_file, "<h2 style='color:#333;'>Tree Dump at %s</h2>\n", ctime(&now));
+
+    if (comment != NULL)
+    {
+        fprintf(htm_file, "<div style='background: #2d2d2d; padding: 10px; margin: 10px 0; border-left: 4px solid #ff6b6b;'>\n");
+        fprintf(htm_file, "<p style='color: #ff6b6b; font-weight: bold; margin: 0;'>%s</p>\n", comment);
+        fprintf(htm_file, "</div>\n");
+    }
 }
 
 void WriteDumpFooter(FILE* htm_file)
@@ -258,18 +252,169 @@ void WriteDumpFooter(FILE* htm_file)
     fprintf(htm_file, "</div>\n\n");
 }
 
-TreeErrorType TreeDumpToHtm(Tree* tree, FILE* htm_file, const char* folder_path, const char* folder_name, const char* buffer, size_t buffer_pos)
+TreeErrorType TreeDumpToHtm(Tree* tree, FILE* htm_file, const char* folder_path, const char* folder_name, const char* comment)
 {
     assert(htm_file);
     assert(folder_path);
 
     time_t now = time(NULL);
 
-    WriteDumpHeader(htm_file, now);
-    WriteTreeInfo(htm_file, tree, buffer, buffer_pos);
+    WriteDumpHeader(htm_file, now, comment);
+    WriteTreeInfo(htm_file, tree, NULL, 0);
 
     if (tree != NULL && tree->root != NULL)
     {
+        static int n_of_pictures = 0;
+
+        char temp_dot_global_path[kMaxLengthOfFilename] = {};
+        char temp_svg_global_path[kMaxLengthOfFilename] = {};
+        snprintf(temp_dot_global_path, sizeof(temp_dot_global_path), "%s/tree_%d.dot",
+                 folder_path, n_of_pictures);
+        snprintf(temp_svg_global_path, sizeof(temp_svg_global_path), "%s/tree_%d.svg",
+                 folder_path, n_of_pictures);
+
+        char temp_svg_local_path[kMaxLengthOfFilename] = {};
+        snprintf(temp_svg_local_path, sizeof(temp_svg_local_path), "%s/tree_%d.svg",
+                 folder_name, n_of_pictures);
+
+        n_of_pictures++;
+
+        TreeErrorType dot_result = GenerateDotFile(tree, temp_dot_global_path);
+        if (dot_result != TREE_ERROR_NO)
+            return dot_result;
+
+        char command[kMaxSystemCommandLength] = {};
+        snprintf(command, sizeof(command), "dot -Tsvg -Gcharset=utf8 \"%s\" -o \"%s\"",
+                 temp_dot_global_path, temp_svg_global_path);
+
+        int result = system(command);
+
+        if (result == 0)
+        {
+            fprintf(htm_file, "<div style='text-align:center;'>\n");
+            fprintf(htm_file, "<img src='%s' style='max-width:100%%; border:1px solid #ddd;'>\n", temp_svg_local_path);
+            fprintf(htm_file, "</div>\n");
+        }
+        else
+        {
+            fprintf(htm_file, "<p style='color:red;'>Error generating SVG graph</p>\n");
+        }
+
+        remove(temp_dot_global_path);
+    }
+    else
+    {
+        fprintf(htm_file, "<p style='color:blue;'>No tree to visualize</p>\n");
+    }
+
+    WriteDumpFooter(htm_file);
+    return TREE_ERROR_NO;
+}
+
+TreeErrorType TreeLoadDumpToHtm(Tree* tree, FILE* htm_file, const char* folder_path, const char* folder_name,
+                               const char* buffer, size_t buffer_pos, LoadProgress* progress, const char* comment)
+{
+    assert(htm_file);
+    assert(folder_path);
+
+    time_t now = time(NULL);
+
+    WriteDumpHeader(htm_file, now, comment);
+    WriteTreeInfo(htm_file, tree, buffer, buffer_pos);
+
+    if (progress != NULL && progress->size > 0)
+    {
+        static int n_of_pictures = 0;
+
+        char temp_dot_global_path[kMaxLengthOfFilename] = {};
+        char temp_svg_global_path[kMaxLengthOfFilename] = {};
+        snprintf(temp_dot_global_path, sizeof(temp_dot_global_path), "%s/load_%d.dot",
+                 folder_path, n_of_pictures);
+        snprintf(temp_svg_global_path, sizeof(temp_svg_global_path), "%s/load_%d.svg",
+                 folder_path, n_of_pictures);
+
+        char temp_svg_local_path[kMaxLengthOfFilename] = {};
+        snprintf(temp_svg_local_path, sizeof(temp_svg_local_path), "%s/load_%d.svg",
+                 folder_name, n_of_pictures);
+
+        n_of_pictures++;
+
+        FILE* dot_file = fopen(temp_dot_global_path, "w");
+        if (dot_file)
+        {
+            fprintf(dot_file, "digraph LoadProcess {\n");
+            fprintf(dot_file, "    rankdir=TB;\n");
+            fprintf(dot_file, "    node [shape=record, style=filled, color=black];\n\n");
+
+            for (size_t i = 0; i < progress->size; i++)
+            {
+                Node* node = progress->nodes[i];
+                size_t depth = progress->depths[i];
+                const char* color = GetNodeColor(node, tree);
+
+                fprintf(dot_file, "    node_%p [label=\"{{%s}|{Глубина: %zu}}\", fillcolor=%s];\n",
+                        (void*)node, node->data ? node->data : "NULL", depth, color);
+            }
+
+            size_t max_depth = 0;
+            for (size_t i = 0; i < progress->size; i++)
+            {
+                if (progress->depths[i] > max_depth)
+                    max_depth = progress->depths[i];
+            }
+
+            for (size_t depth = 0; depth <= max_depth; depth++)
+            {
+                fprintf(dot_file, "    { rank = same; ");
+                for (size_t i = 0; i < progress->size; i++)
+                {
+                    if (progress->depths[i] == depth)
+                        fprintf(dot_file, "node_%p; ", (void*)progress->nodes[i]);
+                }
+                fprintf(dot_file, "}\n");
+            }
+
+            for (size_t i = 0; i < progress->size; i++)
+            {
+                Node* node = progress->nodes[i];
+                if (node->left)
+                {
+                    fprintf(dot_file, "    node_%p -> node_%p [color=blue, label=\"L\"];\n",
+                            (void*)node, (void*)node->left);
+                }
+                if (node->right)
+                {
+                    fprintf(dot_file, "    node_%p -> node_%p [color=green, label=\"R\"];\n",
+                            (void*)node, (void*)node->right);
+                }
+            }
+
+            fprintf(dot_file, "}\n");
+            fclose(dot_file);
+
+            char svg_command[kMaxSystemCommandLength] = {};
+            snprintf(svg_command, sizeof(svg_command), "dot -Tsvg -Gcharset=utf8 \"%s\" -o \"%s\"",
+                     temp_dot_global_path, temp_svg_global_path);
+
+            int result = system(svg_command);
+
+            if (result == 0)
+            {
+                fprintf(htm_file, "<div style='text-align:center;'>\n");
+                fprintf(htm_file, "<img src='%s' style='max-width:100%%; border:1px solid #ddd;'>\n", temp_svg_local_path);
+                fprintf(htm_file, "</div>\n");
+            }
+            else
+            {
+                fprintf(htm_file, "<p style='color:red;'>Error generating SVG graph</p>\n");
+            }
+
+            remove(temp_dot_global_path);
+        }
+    }
+    else if (tree != NULL && tree->root != NULL)
+    {
+        //если нет прогресса, но есть дерево, то показываем обычное дерево
         static int n_of_pictures = 0;
 
         char temp_dot_global_path[kMaxLengthOfFilename] = {};
@@ -317,7 +462,7 @@ TreeErrorType TreeDumpToHtm(Tree* tree, FILE* htm_file, const char* folder_path,
     return TREE_ERROR_NO;
 }
 
-TreeErrorType TreeDump(Tree* tree, const char* filename, const char* buffer, size_t buffer_pos)
+TreeErrorType TreeDump(Tree* tree, const char* filename)
 {
     if (tree == NULL)
         return TREE_ERROR_NULL_PTR;
@@ -342,7 +487,39 @@ TreeErrorType TreeDump(Tree* tree, const char* filename, const char* buffer, siz
     if (!htm_file)
         return TREE_ERROR_OPENING_FILE;
 
-    TreeErrorType result = TreeDumpToHtm(tree, htm_file, folder_path, folder_name, buffer, buffer_pos);
+    TreeErrorType result = TreeDumpToHtm(tree, htm_file, folder_path, folder_name, NULL);
+
+    fclose(htm_file);
+    return result;
+}
+
+TreeErrorType TreeLoadDump(Tree* tree, const char* filename, const char* buffer,
+                          size_t buffer_pos, LoadProgress* progress, const char* comment)
+{
+    if (tree == NULL && progress == NULL)
+        return TREE_ERROR_NULL_PTR;
+
+    char command[kMaxSystemCommandLength] = {};
+    snprintf(command, sizeof(command), "mkdir -p %s", kGeneralFolderNameForLogs);
+    system(command);
+
+    char folder_name[kMaxLengthOfFilename] = {};
+    snprintf(folder_name, sizeof(folder_name), "%s_dump", filename);
+
+    char folder_path[kMaxLengthOfFilename] = {};
+    snprintf(folder_path, sizeof(folder_path), "%s/%s_dump", kGeneralFolderNameForLogs, filename);
+
+    snprintf(command, sizeof(command), "mkdir -p %s", folder_path);
+    system(command);
+
+    char htm_filename[kMaxLengthOfFilename] = {};
+    snprintf(htm_filename, sizeof(htm_filename), "%s/%s.htm", kGeneralFolderNameForLogs, filename);
+
+    FILE* htm_file = fopen(htm_filename, "a");
+    if (!htm_file)
+        return TREE_ERROR_OPENING_FILE;
+
+    TreeErrorType result = TreeLoadDumpToHtm(tree, htm_file, folder_path, folder_name, buffer, buffer_pos, progress, comment);
 
     fclose(htm_file);
     return result;
@@ -363,6 +540,7 @@ TreeErrorType InitTreeLog(const char* filename)
                       "<html>\n"
                       "<head>\n"
                       "<title>Tree Dump Log</title>\n"
+                      "<meta charset='UTF-8'>\n"
                       "<style>\n"
                       "body { font-family: Arial, sans-serif; margin: 20px; }\n"
                       "table { border-collapse: collapse; width: 100%%; }\n"

@@ -71,8 +71,7 @@ void PlayAkinator(Tree* tree)
 
         SafeInputString(distinguishing_question, sizeof(distinguishing_question), "");
 
-        TreeErrorType result = TreeAddQuestion(tree, current, distinguishing_question,
-                                               correct_answer, current->data);
+        TreeErrorType result = TreeAddQuestion(tree, current, distinguishing_question,correct_answer);
 
         if (result == TREE_ERROR_NO)
             printf("Спасибо! Теперь я знаю больше!\n");

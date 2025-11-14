@@ -9,10 +9,9 @@ typedef struct {
     bool answer; // true да, false нет
 } PathStep;
 
-TreeErrorType TreeInsert     (Tree* tree, const char* value);
-TreeErrorType TreeAddQuestion(Tree* tree, Node* leaf, const char* question, const char* yes_answer, const char* no_answer);
+TreeErrorType TreeAddQuestion(Tree* tree, Node* current_node, const char* question, const char* new_object);
 TreeErrorType PrintObjectPath(Tree* tree, const char* object);
-Node*         FindLeafByData (Node* node, const char* data, bool case_sensitive);
+Node*         FindLeafByData (Node* node, const char* data);
 
 
 #endif // TREE_OPERATIONS_H_

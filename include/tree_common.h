@@ -3,12 +3,13 @@
 
 #include <stdlib.h>
 
-const int         kMaxSystemCommandLength   = 512;
-const int         kMaxLengthOfFilename      = 256;
-const char* const kGeneralFolderNameForLogs = "tree_logs";
-const int         kMaxLengthOfAnswer        = 256;
-const int         kMaxInputCapacity         = 256;
-const int         kMaxPathDepth             = 100;
+const int         kMaxSystemCommandLength             = 512;
+const int         kMaxLengthOfFilename                = 256;
+const char* const kGeneralFolderNameForLogs           = "tree_logs";
+const int         kMaxLengthOfAnswer                  = 256;
+const int         kMaxInputCapacity                   = 256;
+const int         kMaxPathDepth                       = 100;
+const int         kTreeDumpAfterAddingElementCapacity = 512;
 
 typedef const char* TreeElement;
 
@@ -25,6 +26,14 @@ typedef struct {
     size_t size;
     char* file_buffer;
 } Tree;
+
+typedef struct {
+    Node** nodes;
+    size_t* depths;
+    size_t size;
+    size_t capacity;
+    size_t current_depth;
+} LoadProgress;
 
 
 #endif //TREE_COMMON_H_
