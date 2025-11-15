@@ -12,8 +12,7 @@ void InitLoadProgress(LoadProgress* progress)
     progress->capacity      = 10;
     progress->size          = 0;
     progress->current_depth = 0;
-    progress->nodes         = (Node**) calloc(progress->capacity, sizeof(Node*));
-    progress->depths        = (size_t*)calloc(progress->capacity, sizeof(size_t));
+    progress->items         = (NodeDepthInfo*)calloc(progress->capacity, sizeof(NodeDepthInfo));
 }
 
 void AddNodeToLoadProgress(LoadProgress* progress, Node* node, size_t depth)
@@ -21,33 +20,30 @@ void AddNodeToLoadProgress(LoadProgress* progress, Node* node, size_t depth)
     if (progress->size >= progress->capacity)
     {
         progress->capacity *= 2;
-        progress->nodes     = (Node**) realloc(progress->nodes,  progress->capacity * sizeof(Node*));
-        progress->depths    = (size_t*)realloc(progress->depths, progress->capacity * sizeof(size_t));
+        progress->items = (NodeDepthInfo*)realloc(progress->items, progress->capacity * sizeof(NodeDepthInfo));
     }
-    progress->nodes[progress->size]  = node;
-    progress->depths[progress->size] = depth;
+    progress->items[progress->size].node  = node;
+    progress->items[progress->size].depth = depth;
     progress->size++;
 }
 
 void FreeLoadProgress(LoadProgress* progress)
 {
-    free(progress->nodes);
-    free(progress->depths);
+    free(progress->items);
 
-    progress->nodes         = NULL;
-    progress->depths        = NULL;
+    progress->items         = NULL;
     progress->capacity      = 0;
     progress->size          = 0;
     progress->current_depth = 0;
 }
 
-static void SkipSpaces(const char* buffer, size_t* pos) //FIXME возвращать pos, а не через указатель изменять
+static void SkipSpaces(const char* buffer, size_t* pos)
 {
     while (isspace(buffer[*pos]))
         (*pos)++;
 }
 
-static const char* ReadQuotedString(const char* buffer, size_t* pos, size_t* len_out)
+static char* ReadQuotedString(char* buffer, size_t* pos)
 {
     SkipSpaces(buffer, pos);
 
@@ -55,21 +51,22 @@ static const char* ReadQuotedString(const char* buffer, size_t* pos, size_t* len
         return NULL;
     (*pos)++;
 
-    size_t start = *pos;
+    char* start = buffer + *pos;
+
     while (buffer[*pos] != '\0' && buffer[*pos] != '"')
         (*pos)++;
 
     if (buffer[*pos] != '"')
         return NULL;
 
-    *len_out = *pos - start;
+    buffer[*pos] = '\0';
     (*pos)++;
 
-    return buffer + start;
+    return start;
 }
 
-static Node* ReadNodeFromBuffer(Tree* tree, const char* buffer, size_t* pos, Node* parent,
-                                char* string_pool, size_t* pool_pos, int depth, LoadProgress* progress)
+static Node* ReadNodeFromBuffer(Tree* tree, char* buffer, size_t buffer_length, size_t* pos, Node* parent,
+                                int depth, LoadProgress* progress)
 {
     SkipSpaces(buffer, pos);
 
@@ -88,17 +85,11 @@ static Node* ReadNodeFromBuffer(Tree* tree, const char* buffer, size_t* pos, Nod
     (*pos)++;
     SkipSpaces(buffer, pos);
 
-    size_t str_len = 0;
-    const char* str_ptr = ReadQuotedString(buffer, pos, &str_len);
+    char* str_ptr = ReadQuotedString(buffer, pos);
     if (str_ptr == NULL)
         return NULL;
 
-    char* pooled_string = string_pool + *pool_pos;
-    strncpy(pooled_string, str_ptr, str_len);
-    pooled_string[str_len] = '\0';
-    *pool_pos += str_len + 1;
-
-    Node* node = CreateNode(pooled_string, parent, false);
+    Node* node = CreateNode(str_ptr, parent, false);
     if (node == NULL)
         return NULL;
 
@@ -108,15 +99,15 @@ static Node* ReadNodeFromBuffer(Tree* tree, const char* buffer, size_t* pos, Nod
     if (progress != NULL)
     {
         AddNodeToLoadProgress(progress, node, depth);
-        TreeLoadDump(tree, "akinator_parse", buffer, *pos, progress, "Node created");
+        TreeLoadDump(tree, "akinator_parse", buffer, buffer_length, *pos, progress, "Node created");
     }
 
     SkipSpaces(buffer, pos);
-    node->left = ReadNodeFromBuffer(tree, buffer, pos, node, string_pool, pool_pos, depth + 1, progress);
+    node->left = ReadNodeFromBuffer(tree, buffer, buffer_length, pos, node, depth + 1, progress);
 
     SkipSpaces(buffer, pos);
-    node->right = ReadNodeFromBuffer(tree, buffer, pos, node, string_pool, pool_pos, depth + 1, progress);
-
+    node->right = ReadNodeFromBuffer(tree, buffer, buffer_length, pos, node, depth + 1, progress);
+//FIXME побольше дампов, чтобы прям как в тетради
     SkipSpaces(buffer, pos);
     if (buffer[*pos] != ')')
     {
@@ -126,9 +117,24 @@ static Node* ReadNodeFromBuffer(Tree* tree, const char* buffer, size_t* pos, Nod
     (*pos)++;
 
     if (progress != NULL)
-        TreeLoadDump(tree, "akinator_parse", buffer, *pos, progress, "Subtree complete");
+        TreeLoadDump(tree, "akinator_parse", buffer, buffer_length, *pos, progress, "Subtree complete");
 
     return node;
+}
+
+size_t GetFileSize(FILE* file)
+{
+    fseek(file, 0, SEEK_END);
+    long file_size_long = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    if (file_size_long <= 0)
+    {
+        fclose(file);
+        return 0;
+    }
+
+    return (size_t)file_size_long;
 }
 
 TreeErrorType TreeLoad(Tree* tree, const char* filename)
@@ -140,51 +146,36 @@ TreeErrorType TreeLoad(Tree* tree, const char* filename)
     if (file == NULL)
         return TREE_ERROR_IO;
 
-    fseek(file, 0, SEEK_END); // FIXME в функциб
-    long file_size_long = ftell(file);
-    fseek(file, 0, SEEK_SET);
+    size_t file_size = GetFileSize(file);
 
-    if (file_size_long <= 0)
-    {
-        fclose(file);
-        return TREE_ERROR_IO;
-    }
-
-    size_t file_size = (size_t)file_size_long;
-    size_t total_pool_size = file_size * 2 + 1; //ХУЙНЯ ДЕРЬМО
-//СИГМА СКИБИДИ вместо printfа использовать цикл по размеру и печатать через fputc
-    char* buffer_and_pool = (char*)calloc(total_pool_size, sizeof(char));
-    if (buffer_and_pool == NULL)
+    char* file_buffer = (char*)calloc(file_size + 1, sizeof(char));
+    if (file_buffer == NULL)
     {
         fclose(file);
         return TREE_ERROR_ALLOCATION;
     }
 
-    char* file_buffer = buffer_and_pool;
     size_t bytes_read = fread(file_buffer, 1, file_size, file);
     file_buffer[bytes_read] = '\0';
     fclose(file);
 
-    char* string_pool = buffer_and_pool + file_size + 1;
-    size_t pool_pos = 0;
-
-    //с началом процесса загрузки начинаем отслеживать ступени создания дерева
     LoadProgress progress = {};
     InitLoadProgress(&progress);
 
     size_t pos = 0;
-    tree->root = ReadNodeFromBuffer(tree, file_buffer, &pos, NULL, string_pool, &pool_pos, 0, &progress);
+    size_t buffer_length = strlen(file_buffer);
+    tree->root = ReadNodeFromBuffer(tree, file_buffer, buffer_length, &pos, NULL, 0, &progress);
 
     if (tree->root == NULL)
     {
-        free(buffer_and_pool);
+        free(file_buffer);
         FreeLoadProgress(&progress);
         return TREE_ERROR_FORMAT;
     }
 
-    tree->file_buffer = buffer_and_pool;
+    tree->file_buffer = file_buffer;
 
-    TreeDump(tree, "akinator"); //финальный дамп после загрузки базы данных
+    TreeDump(tree, "akinator"); //финальный дамп после загрузки дерева
 
     FreeLoadProgress(&progress);
 
@@ -207,11 +198,20 @@ static void WriteNodeToFile(FILE* file, const Node* node, int depth, bool should
         return;
     }
 
-    fprintf(file, "( \"%s\" \n", node->data);
+    fprintf(file, "( \"");
+    const char* str = node->data;
+    while (*str != '\0')
+    {
+        fputc(*str, file);
+        str++;
+    }
+    fprintf(file, "\" \n");
+
     WriteNodeToFile(file, node->left, depth + 1, should_print_tabs);
     if (node->left == NULL)
         should_print_tabs = false;
     WriteNodeToFile(file, node->right, depth + 1, should_print_tabs);
+
     for (int i = 0; i < depth; i++)
         fprintf(file, "    ");
     fprintf(file, ")\n");

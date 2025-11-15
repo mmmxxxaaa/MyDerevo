@@ -29,11 +29,15 @@ typedef struct {
 } Tree;
 
 typedef struct {
-    Node**  nodes;
-    size_t* depths;
-    size_t  size;
-    size_t  capacity;
-    size_t  current_depth;
+    Node*  node;
+    size_t depth;
+} NodeDepthInfo;
+
+typedef struct {
+    NodeDepthInfo* items;
+    size_t         size;
+    size_t         capacity;
+    size_t         current_depth;
 } LoadProgress;
 
 

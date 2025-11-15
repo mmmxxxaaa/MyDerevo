@@ -18,13 +18,13 @@ int main(int argc, const char** argv)
 
     printf("=== АКИНАТОР ===\n");
 
-    TreeErrorType load_result = TreeLoad(&tree, filename);
-    // TreeErrorType load_result = TREE_ERROR_NULL_PTR;
+    // TreeErrorType load_result = TreeLoad(&tree, filename);
+    TreeErrorType load_result = TREE_ERROR_NULL_PTR;
+
     if (load_result != TREE_ERROR_NO)
     {
         printf("He удалось загрузить дерево из файла. Создаем новое дерево.\n");
-        Node* current = tree.root;
-        TreeAddQuestion(&tree, current, "Это животное?", "кошка"); //ПОФИКСИТЬ ЭТО, сделать так, чтобы создавался хотя бы 1 вопрос
+        TreeInitWithFirstQuestion(&tree, "Это животное?", "кошка", "неизвестно что");
     }
     else
     {

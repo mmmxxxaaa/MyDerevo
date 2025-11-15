@@ -47,7 +47,7 @@ void UserInterface(UserActionChoices* choice)
     }
 }
 
-void ChooseAction(Tree* tree, UserActionChoices choice, const char* filename) //FIXME сюда файл передавать
+void ChooseAction(Tree* tree, UserActionChoices choice, const char* filename)
 {
     assert(tree);
     assert(filename);

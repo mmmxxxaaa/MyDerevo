@@ -9,6 +9,7 @@ typedef struct {
     bool answer; // true да, false нет
 } PathStep;
 
+TreeErrorType TreeInitWithFirstQuestion(Tree* tree, const char* question, const char* first_object, const char* default_object);
 TreeErrorType TreeAddQuestion(Tree* tree, Node* current_node, const char* question, const char* new_object);
 TreeErrorType PrintObjectPath(Tree* tree, const char* object);
 Node*         FindLeafByData (Node* node, const char* data);

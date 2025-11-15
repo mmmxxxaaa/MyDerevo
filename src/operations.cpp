@@ -7,6 +7,44 @@
 #include "io.h"
 #include "dump.h"
 
+TreeErrorType TreeInitWithFirstQuestion(Tree* tree, const char* question, const char* first_object, const char* default_object)
+{
+    if (tree == NULL || question == NULL || first_object == NULL || default_object == NULL)
+        return TREE_ERROR_NULL_PTR;
+
+    if (tree->root != NULL)
+        return TREE_ERROR_ALREADY_INITIALIZED;
+
+    tree->root = CreateNode(strdup(question), NULL, true);
+    if (tree->root == NULL)
+        return TREE_ERROR_ALLOCATION;
+
+    tree->root->left = CreateNode(strdup(first_object), tree->root, true);
+    if (tree->root->left == NULL)
+    {
+        free(tree->root->data);
+        free(tree->root);
+        tree->root = NULL;
+        return TREE_ERROR_ALLOCATION;
+    }
+
+    tree->root->right = CreateNode(strdup(default_object), tree->root, true);
+    if (tree->root->right == NULL)
+    {
+        free(tree->root->left->data);
+        free(tree->root->left);
+        free(tree->root->data);
+        free(tree->root);
+        tree->root = NULL;
+        return TREE_ERROR_ALLOCATION;
+    }
+
+    tree->size = 3;
+
+    TreeDump(tree, "akinator");
+    return TREE_ERROR_NO;
+}
+
 TreeErrorType TreeAddQuestion(Tree* tree, Node* current_node, const char* question, const char* new_object)
 {
     if (tree == NULL || current_node == NULL || question == NULL || new_object == NULL)

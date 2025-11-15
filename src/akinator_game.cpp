@@ -80,7 +80,6 @@ void PlayAkinator(Tree* tree)
     }
 }
 
-
 void FindObjectDefinition(Tree* tree)
 {
     if (tree == NULL || tree->root == NULL)
