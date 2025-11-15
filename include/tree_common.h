@@ -10,11 +10,12 @@ const int         kMaxLengthOfAnswer                  = 256;
 const int         kMaxInputCapacity                   = 256;
 const int         kMaxPathDepth                       = 100;
 const int         kTreeDumpAfterAddingElementCapacity = 512;
+const char* const kDefaultDataBaseFilename            = "akinator_tree.txt";
 
-typedef const char* TreeElement;
+typedef char* TreeElement;
 
 typedef struct Node {
-    TreeElement data;
+    TreeElement  data;
     struct Node* left;
     struct Node* right;
     struct Node* parent;
@@ -28,11 +29,11 @@ typedef struct {
 } Tree;
 
 typedef struct {
-    Node** nodes;
+    Node**  nodes;
     size_t* depths;
-    size_t size;
-    size_t capacity;
-    size_t current_depth;
+    size_t  size;
+    size_t  capacity;
+    size_t  current_depth;
 } LoadProgress;
 
 

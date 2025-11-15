@@ -12,7 +12,7 @@ void InitLoadProgress(LoadProgress* progress)
     progress->capacity      = 10;
     progress->size          = 0;
     progress->current_depth = 0;
-    progress->nodes         = (Node**)calloc(progress->capacity, sizeof(Node*));
+    progress->nodes         = (Node**) calloc(progress->capacity, sizeof(Node*));
     progress->depths        = (size_t*)calloc(progress->capacity, sizeof(size_t));
 }
 
@@ -21,7 +21,7 @@ void AddNodeToLoadProgress(LoadProgress* progress, Node* node, size_t depth)
     if (progress->size >= progress->capacity)
     {
         progress->capacity *= 2;
-        progress->nodes     = (Node**)realloc(progress->nodes, progress->capacity * sizeof(Node*));
+        progress->nodes     = (Node**) realloc(progress->nodes,  progress->capacity * sizeof(Node*));
         progress->depths    = (size_t*)realloc(progress->depths, progress->capacity * sizeof(size_t));
     }
     progress->nodes[progress->size]  = node;
@@ -34,14 +34,14 @@ void FreeLoadProgress(LoadProgress* progress)
     free(progress->nodes);
     free(progress->depths);
 
-    progress->nodes = NULL;
-    progress->depths = NULL;
-    progress->capacity = 0;
-    progress->size = 0;
+    progress->nodes         = NULL;
+    progress->depths        = NULL;
+    progress->capacity      = 0;
+    progress->size          = 0;
     progress->current_depth = 0;
 }
 
-static void SkipSpaces(const char* buffer, size_t* pos)
+static void SkipSpaces(const char* buffer, size_t* pos) //FIXME возвращать pos, а не через указатель изменять
 {
     while (isspace(buffer[*pos]))
         (*pos)++;
@@ -76,9 +76,9 @@ static Node* ReadNodeFromBuffer(Tree* tree, const char* buffer, size_t* pos, Nod
     if (buffer[*pos] == '\0')
         return NULL;
 
-    if (strncmp(buffer + *pos, "nil", 3) == 0)
+    if (strncmp(buffer + *pos, "nil", sizeof("nil") - 1) == 0)
     {
-        *pos += 3;
+        *pos += sizeof("nil") - 1;
         return NULL;
     }
 
@@ -112,15 +112,12 @@ static Node* ReadNodeFromBuffer(Tree* tree, const char* buffer, size_t* pos, Nod
     }
 
     SkipSpaces(buffer, pos);
-
     node->left = ReadNodeFromBuffer(tree, buffer, pos, node, string_pool, pool_pos, depth + 1, progress);
 
     SkipSpaces(buffer, pos);
-
     node->right = ReadNodeFromBuffer(tree, buffer, pos, node, string_pool, pool_pos, depth + 1, progress);
 
     SkipSpaces(buffer, pos);
-
     if (buffer[*pos] != ')')
     {
         TreeDestroyWithDataRecursive(node);
@@ -143,7 +140,7 @@ TreeErrorType TreeLoad(Tree* tree, const char* filename)
     if (file == NULL)
         return TREE_ERROR_IO;
 
-    fseek(file, 0, SEEK_END);
+    fseek(file, 0, SEEK_END); // FIXME в функциб
     long file_size_long = ftell(file);
     fseek(file, 0, SEEK_SET);
 
@@ -154,8 +151,8 @@ TreeErrorType TreeLoad(Tree* tree, const char* filename)
     }
 
     size_t file_size = (size_t)file_size_long;
-    size_t total_pool_size = file_size * 2 + 1;
-
+    size_t total_pool_size = file_size * 2 + 1; //ХУЙНЯ ДЕРЬМО
+//СИГМА СКИБИДИ вместо printfа использовать цикл по размеру и печатать через fputc
     char* buffer_and_pool = (char*)calloc(total_pool_size, sizeof(char));
     if (buffer_and_pool == NULL)
     {
@@ -170,8 +167,6 @@ TreeErrorType TreeLoad(Tree* tree, const char* filename)
 
     char* string_pool = buffer_and_pool + file_size + 1;
     size_t pool_pos = 0;
-
-    TreeDtor(tree);
 
     //с началом процесса загрузки начинаем отслеживать ступени создания дерева
     LoadProgress progress = {};
@@ -196,19 +191,30 @@ TreeErrorType TreeLoad(Tree* tree, const char* filename)
     return TREE_ERROR_NO;
 }
 
-static void WriteNodeToFile(FILE* file, const Node* node)
+static void WriteNodeToFile(FILE* file, const Node* node, int depth, bool should_print_tabs)
 {
+    if (should_print_tabs)
+    {
+        for (int i = 0; i < depth; i++)
+            fprintf(file, "    ");
+    }
+
     if (node == NULL)
     {
-        fprintf(file, "nil");
+        fprintf(file, "nil ");
+        if (!should_print_tabs)
+            fprintf(file, "\n");
         return;
     }
 
-    fprintf(file, "( \"%s\" ", node->data);
-    WriteNodeToFile(file, node->left);
-    fprintf(file, " ");
-    WriteNodeToFile(file, node->right);
-    fprintf(file, ")");
+    fprintf(file, "( \"%s\" \n", node->data);
+    WriteNodeToFile(file, node->left, depth + 1, should_print_tabs);
+    if (node->left == NULL)
+        should_print_tabs = false;
+    WriteNodeToFile(file, node->right, depth + 1, should_print_tabs);
+    for (int i = 0; i < depth; i++)
+        fprintf(file, "    ");
+    fprintf(file, ")\n");
 }
 
 TreeErrorType TreeSave(const Tree* tree, const char* filename)
@@ -220,7 +226,8 @@ TreeErrorType TreeSave(const Tree* tree, const char* filename)
     if (file == NULL)
         return TREE_ERROR_IO;
 
-    WriteNodeToFile(file, tree->root);
+    int starting_depth = 0;
+    WriteNodeToFile(file, tree->root, starting_depth, true);
     fprintf(file, "\n");
     fclose(file);
 
@@ -302,9 +309,19 @@ bool GetUserAnswer(const char* question)
 
         ToLowerCase(answer);
 
-        if (strcmp(answer, "да") == 0 || strcmp(answer, "д") == 0 || strcmp(answer, "yes") == 0 || strcmp(answer, "y") == 0)
+        if (
+            strcmp(answer, "да") == 0
+            || strcmp(answer, "д") == 0
+            || strcmp(answer, "yes") == 0
+            || strcmp(answer, "y") == 0
+        )
             return true;
-        else if (strcmp(answer, "нет") == 0 || strcmp(answer, "н") == 0 || strcmp(answer, "no") == 0 || strcmp(answer, "n") == 0)
+        else if (
+            strcmp(answer, "нет") == 0
+            || strcmp(answer, "н") == 0
+            || strcmp(answer, "no") == 0
+            || strcmp(answer, "n") == 0
+        )
             return false;
         else
             printf("Пожалуйста, ответьте 'да' или 'нет'.\n");

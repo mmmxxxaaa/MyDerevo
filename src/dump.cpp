@@ -231,6 +231,50 @@ void WriteTreeInfo(FILE* htm_file, Tree* tree, const char* buffer, size_t buffer
     fprintf(htm_file, "</div>\n");
 }
 
+TreeErrorType WriteTreeCommonPicture(Tree* tree, FILE* htm_file, const char* folder_path, const char* folder_name)
+{
+    static int n_of_pictures = 0;
+
+    char temp_dot_global_path[kMaxLengthOfFilename] = {};
+    char temp_svg_global_path[kMaxLengthOfFilename] = {};
+
+    snprintf(temp_dot_global_path, sizeof(temp_dot_global_path), "%s/tree_%d.dot",
+             folder_path, n_of_pictures);
+    snprintf(temp_svg_global_path, sizeof(temp_svg_global_path), "%s/tree_%d.svg",
+             folder_path, n_of_pictures);
+
+    char temp_svg_local_path[kMaxLengthOfFilename] = {};
+    snprintf(temp_svg_local_path, sizeof(temp_svg_local_path), "%s/tree_%d.svg",
+             folder_name, n_of_pictures);
+
+    n_of_pictures++;
+
+    TreeErrorType dot_result = GenerateDotFile(tree, temp_dot_global_path);
+    if (dot_result != TREE_ERROR_NO)
+        return dot_result;
+
+    char command[kMaxSystemCommandLength] = {};
+    snprintf(command, sizeof(command), "dot -Tsvg -Gcharset=utf8 \"%s\" -o \"%s\"",
+             temp_dot_global_path, temp_svg_global_path);
+
+    int result = system(command);
+
+    if (result == 0)
+    {
+        fprintf(htm_file, "<div style='text-align:center;'>\n");
+        fprintf(htm_file, "<img src='%s' style='max-width:100%%; border:1px solid #ddd;'>\n", temp_svg_local_path);
+        fprintf(htm_file, "</div>\n");
+    }
+    else
+    {
+        fprintf(htm_file, "<p style='color:red;'>Error generating SVG graph</p>\n");
+    }
+
+    remove(temp_dot_global_path);
+
+    return TREE_ERROR_NO;
+}
+
 void WriteDumpHeader(FILE* htm_file, time_t now, const char* comment)
 {
     assert(htm_file);
@@ -264,43 +308,9 @@ TreeErrorType TreeDumpToHtm(Tree* tree, FILE* htm_file, const char* folder_path,
 
     if (tree != NULL && tree->root != NULL)
     {
-        static int n_of_pictures = 0;
-
-        char temp_dot_global_path[kMaxLengthOfFilename] = {};
-        char temp_svg_global_path[kMaxLengthOfFilename] = {};
-        snprintf(temp_dot_global_path, sizeof(temp_dot_global_path), "%s/tree_%d.dot",
-                 folder_path, n_of_pictures);
-        snprintf(temp_svg_global_path, sizeof(temp_svg_global_path), "%s/tree_%d.svg",
-                 folder_path, n_of_pictures);
-
-        char temp_svg_local_path[kMaxLengthOfFilename] = {};
-        snprintf(temp_svg_local_path, sizeof(temp_svg_local_path), "%s/tree_%d.svg",
-                 folder_name, n_of_pictures);
-
-        n_of_pictures++;
-
-        TreeErrorType dot_result = GenerateDotFile(tree, temp_dot_global_path);
-        if (dot_result != TREE_ERROR_NO)
-            return dot_result;
-
-        char command[kMaxSystemCommandLength] = {};
-        snprintf(command, sizeof(command), "dot -Tsvg -Gcharset=utf8 \"%s\" -o \"%s\"",
-                 temp_dot_global_path, temp_svg_global_path);
-
-        int result = system(command);
-
-        if (result == 0)
-        {
-            fprintf(htm_file, "<div style='text-align:center;'>\n");
-            fprintf(htm_file, "<img src='%s' style='max-width:100%%; border:1px solid #ddd;'>\n", temp_svg_local_path);
-            fprintf(htm_file, "</div>\n");
-        }
-        else
-        {
-            fprintf(htm_file, "<p style='color:red;'>Error generating SVG graph</p>\n");
-        }
-
-        remove(temp_dot_global_path);
+        TreeErrorType result_writing_picture = WriteTreeCommonPicture(tree, htm_file, folder_path, folder_name);
+        if (result_writing_picture != TREE_ERROR_NO)
+            return result_writing_picture;
     }
     else
     {
@@ -338,7 +348,7 @@ TreeErrorType TreeLoadDumpToHtm(Tree* tree, FILE* htm_file, const char* folder_p
                  folder_name, n_of_pictures);
 
         n_of_pictures++;
-
+//в отдельную функцию генерации дот файла для LoadDump
         FILE* dot_file = fopen(temp_dot_global_path, "w");
         if (dot_file)
         {
@@ -414,44 +424,9 @@ TreeErrorType TreeLoadDumpToHtm(Tree* tree, FILE* htm_file, const char* folder_p
     }
     else if (tree != NULL && tree->root != NULL)
     {
-        //если нет прогресса, но есть дерево, то показываем обычное дерево
-        static int n_of_pictures = 0;
-
-        char temp_dot_global_path[kMaxLengthOfFilename] = {};
-        char temp_svg_global_path[kMaxLengthOfFilename] = {};
-        snprintf(temp_dot_global_path, sizeof(temp_dot_global_path), "%s/tree_%d.dot",
-                 folder_path, n_of_pictures);
-        snprintf(temp_svg_global_path, sizeof(temp_svg_global_path), "%s/tree_%d.svg",
-                 folder_path, n_of_pictures);
-
-        char temp_svg_local_path[kMaxLengthOfFilename] = {};
-        snprintf(temp_svg_local_path, sizeof(temp_svg_local_path), "%s/tree_%d.svg",
-                 folder_name, n_of_pictures);
-
-        n_of_pictures++;
-
-        TreeErrorType dot_result = GenerateDotFile(tree, temp_dot_global_path);
-        if (dot_result != TREE_ERROR_NO)
-            return dot_result;
-
-        char command[kMaxSystemCommandLength] = {};
-        snprintf(command, sizeof(command), "dot -Tsvg -Gcharset=utf8 \"%s\" -o \"%s\"",
-                 temp_dot_global_path, temp_svg_global_path);
-
-        int result = system(command);
-
-        if (result == 0)
-        {
-            fprintf(htm_file, "<div style='text-align:center;'>\n");
-            fprintf(htm_file, "<img src='%s' style='max-width:100%%; border:1px solid #ddd;'>\n", temp_svg_local_path);
-            fprintf(htm_file, "</div>\n");
-        }
-        else
-        {
-            fprintf(htm_file, "<p style='color:red;'>Error generating SVG graph</p>\n");
-        }
-
-        remove(temp_dot_global_path);
+        TreeErrorType result_writing_picture = WriteTreeCommonPicture(tree, htm_file, folder_path, folder_name); //FIXME обработать возвращаемое значение
+        if (result_writing_picture != TREE_ERROR_NO)
+            return result_writing_picture;
     }
     else
     {

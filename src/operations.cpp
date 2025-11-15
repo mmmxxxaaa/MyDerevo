@@ -25,18 +25,18 @@ TreeErrorType TreeAddQuestion(Tree* tree, Node* current_node, const char* questi
 
     if (current_node->left == NULL || current_node->right == NULL)
     {
-        free((void*)current_node->data);
+        free(current_node->data);
         current_node->data = old_data;
         current_node->is_dynamic = old_is_dynamic;
 
         if (current_node->left)
         {
-            free((void*)current_node->left->data);
+            free(current_node->left->data);
             free(current_node->left);
         }
         if (current_node->right)
         {
-            free((void*)current_node->right->data);
+            free(current_node->right->data);
             free(current_node->right);
         }
         current_node->left = current_node->right = NULL;
@@ -44,7 +44,7 @@ TreeErrorType TreeAddQuestion(Tree* tree, Node* current_node, const char* questi
     }
 
     if (old_is_dynamic && old_data != NULL)
-        free((void*)old_data);
+        free(old_data);
 
     tree->size += 2;
 
@@ -63,7 +63,7 @@ Node* FindLeafByData(Node* node, const char* data)
     if (IsLeaf(node))
     {
         char* node_data_lower = (char*)calloc(strlen(node->data) + 1, sizeof(char));
-        char* data_lower = (char*)calloc(strlen(data) + 1, sizeof(char));
+        char* data_lower =      (char*)calloc(strlen(data) + 1,       sizeof(char));
         if (node_data_lower == NULL || data_lower == NULL)
         {
             free(node_data_lower);

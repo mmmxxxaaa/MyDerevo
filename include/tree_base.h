@@ -6,7 +6,7 @@
 
 TreeErrorType TreeCtor(Tree* tree);
 TreeErrorType TreeDtor(Tree* tree);
-Node* CreateNode(const char* value, Node* parent, bool is_dynamic);
+Node* CreateNode(TreeElement value, Node* parent, bool is_dynamic);
 bool IsLeaf(Node* node);
 TreeErrorType TreeDestroyWithDataRecursive(Node* node);
 

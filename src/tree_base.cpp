@@ -65,7 +65,7 @@ TreeErrorType TreeDestroyWithDataRecursive(Node* node)
     TreeDestroyWithDataRecursive(node->right);
 
     if (node->is_dynamic && node->data != NULL)
-        free((void*)node->data);  // FIXME какая-то хуйня но пока так
+        free(node->data);
 
     free(node);
     return TREE_ERROR_NO;

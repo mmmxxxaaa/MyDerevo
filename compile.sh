@@ -1,6 +1,7 @@
 #!/bin/bash
 
-files="src/main.cpp src/akinator_game.cpp src/dump.cpp src/io.cpp src/operations.cpp src/tree_base.cpp"
+files="src/main.cpp src/akinator_game.cpp src/dump.cpp src/io.cpp src/operations.cpp src/tree_base.cpp \
+       src/user_interface.cpp"
 
 flags="-D _DEBUG -ggdb3 -std=c++17 -O0 -Wall -Wextra -Weffc++ -Waggressive-loop-optimizations \
     -Wc++14-compat -Wmissing-declarations -Wcast-align -Wcast-qual -Wchar-subscripts \
